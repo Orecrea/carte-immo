@@ -130,6 +130,9 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
   .spin{width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .dest-row{display:flex;gap:8px;margin-bottom:10px}
+  .opt+.opt{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+  .opt-h{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px}
+  .link.addl{display:block;margin-top:8px;font-size:12.5px;text-align:left}
   .dest-row .dest{flex:1;margin:0}
   .btn-gares{height:40px;border-radius:10px;white-space:nowrap}
   .btn-gares:disabled{opacity:.45;cursor:not-allowed}
@@ -420,7 +423,8 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
     .cchip .nbt{padding:0 6px;margin-left:2px}
     .cchip .nbt .fl{display:none}
     .cchip .nbt .ab{display:inline}
-    .city-box{padding-left:34px}
+    .city-box{padding-left:12px}
+    .search>svg{display:none}
     .suggest button{padding:12px 14px}
     /* feuille : la poignée et les onglets restent visibles, la liste juste dessous */
     #panel{transform:translateY(calc(100% - 84px));height:calc(100% - 8px)}
@@ -1114,15 +1118,21 @@ pinsLayer.addLayer(cluster);
 let zones = [], addMode = false, zoneSeq = 0;
 const speed = m => MODES[m].kmh * (m === 'walk' ? 1 : 0.8);                 // km/h, 0,8 = détours et attentes
 const estMin = (km, m) => Math.max(1, Math.round(km / speed(m) * 60));
-function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, legs}) => ({id, name, color, kind, origins, legs}))); }
-function approxRadius(z){ return z.legs.reduce((r, g) => r + speed(g.mode) * g.min / 60 * 1000, 0); }
+function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts}) => ({id, name, color, kind, origins, opts}))); }
+const legsRadius = legs => legs.reduce((r, g) => r + speed(g.mode) * g.min / 60 * 1000, 0);
+function approxRadius(z){ return Math.max(...z.opts.map(legsRadius)); }
 function nearestOrigin(z, l){ let best = null; z.origins.forEach(o => { const d = map.distance([o.lat, o.lng], [l.lat, l.lng]); if(!best || d < best.d) best = {o, d}; }); return best; }
 function zoneContains(z, l){
   if(z.poly) return inGeom(l.lng, l.lat, z.poly);
   return nearestOrigin(z, l).d <= approxRadius(z);            // en attendant le calcul
 }
 function zoneHits(l){ return zones.filter(z => zoneContains(z, l)); }
-const legsLabel = z => z.legs.map(g => `${MODES[g.mode].icon} ${g.min}`).join(' + ') + ' min';
+const legsLabel = z => z.opts.map(legs => legs.map(g => `${MODES[g.mode].icon} ${g.min}`).join(' + ') + ' min').join(' ou ');
+function clusterOrigins(origins){   // départs éloignés (villes différentes) : calculés séparément, plus rapide et plus fiable
+  const groups = [];
+  origins.forEach(o => { const g = groups.find(g => g.some(x => kmDist(x.lat, x.lng, o.lat, o.lng) < 12)); g ? g.push(o) : groups.push([o]); });
+  return groups;
+}
 
 /* --- moteurs --- */
 let lastCall = 0, chain = Promise.resolve();
@@ -1268,18 +1278,24 @@ async function legIso(points, mode, min, z){
 async function computeZone(z){
   const run = z.run = (z.run || 0) + 1;
   z.state = 'calc'; z.approx = false; z.fail = false; z.pt = false; z.noPt = false; z.done = 0;
-  const n0 = z.origins.length, samples = Math.min(24, Math.max(8, n0 * 3));
-  z.total = n0 + (z.legs.length - 1) * samples;
+  const groups = clusterOrigins(z.origins);
+  const samplesOf = g => Math.min(24, Math.max(8, g.length * 3));
+  z.total = z.opts.reduce((t, legs) => t + groups.reduce((u, g) => u + g.length + (legs.length - 1) * samplesOf(g), 0), 0);
   renderZoneStatus(z); drawZones();
   try {
-    let region = null, pts = z.origins.map(o => [o.lat, o.lng]);
-    for(let i = 0; i < z.legs.length; i++){
-      if(i > 0) pts = samplePoints(region, samples);
-      const g = await legIso(pts, z.legs[i].mode, z.legs[i].min, z);
-      if(run !== z.run) return;
-      region = unionGeom(region, g);
+    let all = null;
+    for(const legs of z.opts) for(const grp of groups){           // « ou » : chaque possibilité s'ajoute à la zone
+      let region = null, pts = grp.map(o => [o.lat, o.lng]);
+      for(let i = 0; i < legs.length; i++){                      // « puis » : l'étape suivante part du bord de la précédente
+        if(i > 0) pts = samplePoints(region, samplesOf(grp));
+        const g = await legIso(pts, legs[i].mode, legs[i].min, z);
+        if(run !== z.run) return;
+        region = unionGeom(region, g);
+      }
+      all = unionGeom(all, region);
+      z.poly = all; drawZones(); renderListings();                // on montre chaque morceau dès qu'il est prêt
     }
-    z.poly = region; z.state = z.approx ? 'approx' : 'ok';
+    z.poly = all; z.state = z.approx ? 'approx' : 'ok';
   } catch(e){ if(run !== z.run) return; z.state = 'error'; z.poly = null; }
   drawZones(); renderZoneStatus(z); renderListings();
 }
@@ -1289,7 +1305,7 @@ function scheduleCompute(z, ms = 700){ clearTimeout(recompute[z.id]); recompute[
 /* --- création --- */
 function addZone(lat, lng, name, legs = [{mode:'transit', min:20}], extra = {}){
   const used = zones.map(z => z.color);
-  const z = {id: ++zoneSeq, name: name || 'Nouveau point', kind:'point', origins:[{lat, lng, name:name || ''}], legs,
+  const z = {id: ++zoneSeq, name: name || 'Nouveau point', kind:'point', origins:[{lat, lng, name:name || ''}], opts:[legs],
              color: ZONE_COLORS.find(c => !used.includes(c)) || ZONE_COLORS[zoneSeq % ZONE_COLORS.length], ...extra};
   zones.push(z);
   if(!name && z.kind === 'point') reverseName(z);
@@ -1327,14 +1343,18 @@ function renderZoneList(){
         <button class="zone-name" data-focus title="Centrer la carte sur ce périmètre">${z.kind === 'stations' ? '🚉' : '📍'} ${esc(z.name)}</button>
         <button class="icon-btn" data-del aria-label="Supprimer ${esc(z.name)}">×</button>
       </div>
-      ${z.legs.map((g, i) => `
-      <div class="leg" data-leg="${i}">
-        ${z.legs.length > 1 ? `<div class="leg-h"><span>${i === 0 ? 'Étape 1' : 'puis étape ' + (i + 1)}</span><button class="icon-btn" data-rmleg aria-label="Retirer l'étape">×</button></div>` : ''}
-        <div class="seg" role="radiogroup" aria-label="Mode de trajet">${Object.entries(MODES).map(([k, m]) =>
-          `<button role="radio" aria-checked="${g.mode === k}" data-mode="${k}" class="${g.mode === k ? 'on' : ''}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
-        <div class="time"><input type="range" min="5" max="60" step="5" value="${g.min}" data-time aria-label="Durée de l'étape"><output>${g.min} min</output></div>
+      ${z.opts.map((legs, oi) => `<div class="opt" data-opt="${oi}">
+        ${z.opts.length > 1 ? `<div class="opt-h"><span>${oi === 0 ? 'Possibilité 1' : 'ou possibilité ' + (oi + 1)}</span><button class="icon-btn" data-rmopt aria-label="Retirer cette possibilité">×</button></div>` : ''}
+        ${legs.map((g, i) => `
+        <div class="leg" data-leg="${i}">
+          ${legs.length > 1 ? `<div class="leg-h"><span>${i === 0 ? 'Étape 1' : 'puis étape ' + (i + 1)}</span><button class="icon-btn" data-rmleg aria-label="Retirer l'étape">×</button></div>` : ''}
+          <div class="seg" role="radiogroup" aria-label="Mode de trajet">${Object.entries(MODES).map(([k, m]) =>
+            `<button role="radio" aria-checked="${g.mode === k}" data-mode="${k}" class="${g.mode === k ? 'on' : ''}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
+          <div class="time"><input type="range" min="5" max="60" step="5" value="${g.min}" data-time aria-label="Durée de l'étape"><output>${g.min} min</output></div>
+        </div>`).join('')}
+        ${legs.length < 3 ? '<button class="link addl" data-addleg>+ puis une autre étape (ex. 5 min à pied puis 10 min de transports)</button>' : ''}
       </div>`).join('')}
-      ${z.legs.length < 3 ? '<button class="link" data-addleg style="margin-top:8px;font-size:12.5px">+ Ajouter une étape (ex. vélo puis transports)</button>' : ''}
+      ${z.opts.length < 3 ? '<button class="link addl" data-addopt>+ ou une autre façon d\'y aller (ex. 10 min à vélo ou 5 min de transports)</button>' : ''}
       <div class="zstatus"></div>
     </div>`).join('');
   zones.forEach(renderZoneStatus);
@@ -1343,18 +1363,21 @@ function renderZoneList(){
 $('#zones').addEventListener('click', e => {
   const box = e.target.closest('.zone'); if(!box) return;
   const z = zones.find(x => x.id == box.dataset.id), btn = e.target.closest('button'); if(!btn) return;
-  const legEl = btn.closest('.leg'), leg = legEl ? z.legs[+legEl.dataset.leg] : null;
+  const optEl = btn.closest('.opt'), legs = optEl ? z.opts[+optEl.dataset.opt] : null;
+  const legEl = btn.closest('.leg'), leg = legEl && legs ? legs[+legEl.dataset.leg] : null;
   if(btn.hasAttribute('data-del')){
     const i = zones.indexOf(z); zones.splice(i, 1); refresh();
     toast(`« ${z.name} » supprimé`, () => { zones.splice(i, 0, z); refresh(); });
   } else if(btn.dataset.mode && leg){ leg.mode = btn.dataset.mode; renderZoneList(); saveZones(); scheduleCompute(z, 50); }
-  else if(btn.hasAttribute('data-rmleg')){ z.legs.splice(+legEl.dataset.leg, 1); renderZoneList(); saveZones(); scheduleCompute(z, 50); }
-  else if(btn.hasAttribute('data-addleg')){ z.legs.push({mode:'walk', min:10}); renderZoneList(); saveZones(); scheduleCompute(z, 50); }
+  else if(btn.hasAttribute('data-rmleg')){ legs.splice(+legEl.dataset.leg, 1); renderZoneList(); saveZones(); scheduleCompute(z, 50); }
+  else if(btn.hasAttribute('data-addleg')){ legs.push({mode:'transit', min:10}); renderZoneList(); saveZones(); scheduleCompute(z, 50); }
+  else if(btn.hasAttribute('data-rmopt')){ z.opts.splice(+optEl.dataset.opt, 1); renderZoneList(); saveZones(); scheduleCompute(z, 50); }
+  else if(btn.hasAttribute('data-addopt')){ z.opts.push([{mode:'bike', min:10}]); renderZoneList(); saveZones(); scheduleCompute(z, 50); }
   else if(btn.hasAttribute('data-focus')) map.flyToBounds(zoneBounds(z).pad(.1), {duration:.6});
 });
 $('#zones').addEventListener('input', e => {
   if(!e.target.hasAttribute('data-time')) return;
-  const z = zones.find(x => x.id == e.target.closest('.zone').dataset.id), leg = z.legs[+e.target.closest('.leg').dataset.leg];
+  const z = zones.find(x => x.id == e.target.closest('.zone').dataset.id), leg = z.opts[+e.target.closest('.opt').dataset.opt][+e.target.closest('.leg').dataset.leg];
   leg.min = +e.target.value; e.target.nextElementSibling.textContent = leg.min + ' min';
   saveZones(); scheduleCompute(z);
 });
@@ -1366,15 +1389,23 @@ $('#allStations').onclick = async () => {
   if(!cities.length) return;
   const btn = $('#allStations'); btn.disabled = true; btn.textContent = '🚉 Recherche…';
   try {
-    const codes = activeCommunes.length ? activeCommunes.map(c => c.code) : cities.map(c => c.code);
-    const seen = new Set(), gares = [];
-    for(const code of codes) (await stationsOf(code)).filter(s => s.type === 'Gare').forEach(s => { const k = norm(s.name); if(!seen.has(k)){ seen.add(k); gares.push(s); } });
-    if(!gares.length){ toast('Aucune gare trouvée dans ces villes'); return; }
-    const kept = gares.slice(0, 15);
-    const name = 'Gares de ' + cities.map(c => c.name).join(', ') + ` (${kept.length})`;
-    const z = addZone(0, 0, name, [{mode:'walk', min:10}], {kind:'stations', origins:kept.map(s => ({lat:s.lat, lng:s.lng, name:s.name}))});
+    const list = activeCommunes.length ? activeCommunes : cities.map(c => ({code:c.code, name:c.name}));
+    const origins = [], sansGare = [];
+    const res = await Promise.all(list.map(c => stationsOf(c.code).catch(() => stationsOf(c.code)).catch(() => null)));
+    list.forEach((c, i) => {
+      const st = (res[i] || []).slice(0, 3);                   // gares d'abord, puis RER, métro, tram
+      if(st.length) st.forEach(s => { if(!origins.some(o => kmDist(o.lat, o.lng, s.lat, s.lng) < .3)) origins.push({lat:s.lat, lng:s.lng, name:s.name}); });
+      else if(c.main !== false){                                // ville choisie sans gare (ou service indisponible) : on part de son centre
+        const cc = cities.find(x => x.code === c.code), g = c.geom || geoCache[c.code];
+        const ctr = cc ? [cc.lat, cc.lng] : g ? L.geoJSON(g).getBounds().getCenter() : null;
+        if(ctr){ const [la, lo] = Array.isArray(ctr) ? ctr : [ctr.lat, ctr.lng]; origins.push({lat:la, lng:lo, name:'Centre de ' + c.name}); sansGare.push(c.name); }
+      }
+    });
+    if(!origins.length){ toast('Aucune gare trouvée dans ces villes'); return; }
+    const name = 'Gares de mes villes (' + cities.map(c => c.name).join(', ') + ')';
+    const z = addZone(0, 0, name, [{mode:'walk', min:10}], {kind:'stations', origins});
     map.flyToBounds(zoneBounds(z).pad(.2), {duration:.7});
-    toast(`${kept.length} gare${kept.length > 1 ? 's' : ''} retenue${kept.length > 1 ? 's' : ''}${gares.length > kept.length ? ' (les 15 premières sur ' + gares.length + ')' : ''}. Réglez le trajet jusqu'à la gare.`);
+    toast(`${origins.length} point${origins.length > 1 ? 's' : ''} de départ dans ${list.length} commune${list.length > 1 ? 's' : ''}${sansGare.length ? ` (centre-ville pour ${sansGare.slice(0, 3).join(', ')}${sansGare.length > 3 ? '…' : ''})` : ''}. Réglez le trajet ci-dessous.`);
   } catch(_) { toast('Recherche des gares impossible pour le moment'); }
   finally { btn.textContent = '🚉 Gares de mes villes'; btn.disabled = !cities.length; }
 };
@@ -1810,29 +1841,69 @@ async function fetchContour(code){
   const j = await (await fetch(`https://geo.api.gouv.fr/communes/${code}?fields=nom,contour&format=json`)).json();
   geoCache[code] = j.contour; return j.contour;
 }
+async function pool(items, n, fn){ let i = 0; await Promise.all(Array.from({length:Math.min(n, items.length)}, async () => { while(i < items.length){ const k = i++; await fn(items[k]); } })); }
 async function fetchNeighbors(code){
-  if(neighborCache[code]) return neighborCache[code];
-  // communes qui partagent une frontière avec la commune (OpenStreetMap)
-  const q = `[out:json][timeout:25];rel["boundary"="administrative"]["admin_level"="8"]["ref:INSEE"="${code}"];way(r);rel(bw)["boundary"="administrative"]["admin_level"="8"];out tags;`;
-  const j = await overpass(q);
-  return neighborCache[code] = j.elements.map(e => ({code:e.tags['ref:INSEE'], name:e.tags.name})).filter(n => n.code && n.code !== code);
+  if(neighborCache[code] && neighborCache[code].length) return neighborCache[code];
+  // points posés juste à l'extérieur du contour de la commune : chacun tombe dans une commune voisine
+  const g = await fetchContour(code); if(!g) return [];
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates, pts = [];
+  polys.forEach(poly => {
+    const r = poly[0], seg = [];
+    let per = 0; for(let i = 1; i < r.length; i++){ const d = kmDist(r[i - 1][1], r[i - 1][0], r[i][1], r[i][0]); seg.push(d); per += d; }
+    const n = Math.max(12, Math.min(60, Math.round(per * 2.5))), step = per / n;
+    let acc = 0, next = 0;
+    for(let i = 1; i < r.length && pts.length < 200; i++){
+      const [x0, y0] = r[i - 1], [x1, y1] = r[i], d = seg[i - 1];
+      while(d > 0 && next <= acc + d){
+        const t = (next - acc) / d, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t, c = Math.cos(y * Math.PI / 180);
+        const nx = -(y1 - y0), ny = (x1 - x0) * c, len = Math.hypot(nx, ny) || 1;               // perpendiculaire au bord (en km)
+        const off = .35 / 111;                                                                    // 350 m
+        let px = x + nx / len * off / c, py = y + ny / len * off;
+        if(inGeom(px, py, g)){ px = x - nx / len * off / c; py = y - ny / len * off; }
+        if(!inGeom(px, py, g)) pts.push([py, px]);
+        next += step;
+      }
+      acc += d;
+    }
+  });
+  const found = new Map();
+  await pool(pts, 8, async ([la, lo]) => {
+    try { const j = await (await fetch(`https://geo.api.gouv.fr/communes?lat=${la.toFixed(5)}&lon=${lo.toFixed(5)}&fields=code,nom&format=json`)).json();
+          j.forEach(c => { if(c.code !== code) found.set(c.code, c.nom); }); } catch(_) {}
+  });
+  const out = [...found].map(([c, name]) => ({code:c, name}));
+  if(out.length) neighborCache[code] = out;
+  return out;
 }
 let communeSeq = 0, fitCities = false;
 async function updateCommunes(){
   const seq = ++communeSeq;
   if(!cities.length){ activeCommunes = []; drawCommunes(); renderListings(); return; }
-  setStatus(cities.some(c => c.nb) ? 'Recherche des communes limitrophes…' : 'Chargement des contours des communes…');
-  const list = cities.map(c => ({code:c.code, name:c.name, main:true}));
-  try {
-    for(const c of cities.filter(c => c.nb)) (await fetchNeighbors(c.code)).forEach(n => { if(!list.some(x => x.code === n.code)) list.push({...n, main:false}); });
-  } catch(_) { toast('Communes limitrophes indisponibles pour le moment'); }
-  const geoms = await Promise.all(list.map(c => fetchContour(c.code).catch(() => null)));
+  const show = list => { if(seq !== communeSeq) return; activeCommunes = list.filter(c => c.geom); updateSyncNote(); drawCommunes(); renderListings(); saveGeo(); };
+  // 1) les villes choisies tout de suite
+  const main = cities.map(c => ({code:c.code, name:c.name, main:true}));
+  const geoms = await Promise.all(main.map(c => fetchContour(c.code).catch(() => null)));
+  main.forEach((c, i) => c.geom = geoms[i]);
+  show(main);
   if(seq !== communeSeq) return;
-  activeCommunes = list.map((c, i) => ({...c, geom:geoms[i]})).filter(c => c.geom);
-  saveGeo();
-  setStatus(activeCommunes.length ? '' : 'Contours des communes indisponibles');
-  updateSyncNote();
-  drawCommunes(); renderListings();
+  setStatus(main.every(c => c.geom) ? '' : 'Contours de certaines communes indisponibles');
+  // 2) puis les communes limitrophes, ville par ville, dès qu'elles arrivent
+  const nb = cities.filter(c => c.nb); if(!nb.length) return;
+  setStatus('Recherche des communes limitrophes…');
+  const list = main.slice(), fails = [];
+  await Promise.all(nb.map(async c => {
+    let ns = [];
+    try { ns = await fetchNeighbors(c.code); } catch(_) {}
+    if(!ns.length){ fails.push(c.name); return; }
+    const add = ns.filter(n => !list.some(x => x.code === n.code)).map(n => ({...n, main:false}));
+    add.forEach(n => list.push(n));
+    const gs = await Promise.all(add.map(n => fetchContour(n.code).catch(() => null)));
+    add.forEach((n, i) => n.geom = gs[i]);
+    show(list);
+  }));
+  if(seq !== communeSeq) return;
+  setStatus('');
+  if(fails.length) toast(`Communes limitrophes indisponibles pour ${fails.join(', ')} : réessayez dans un instant`);
 }
 function drawCommunes(){
   citiesLayer.clearLayers();
@@ -2287,7 +2358,7 @@ showTab(store.get('tab', 'search'));
 for(const k of Object.keys(favs)) if(/^\d+$/.test(k)) delete favs[k];   // favoris des annonces fictives de la version d'essai
 store.set('favs', favs);
 const saved = store.get('zones', null);
-if(saved && saved.length) saved.forEach(z => { if(!z.origins) z = {id:z.id, name:z.name, color:z.color, kind:'point', origins:[{lat:z.lat, lng:z.lng, name:z.name}], legs:[{mode:z.mode, min:z.min}]}; zones.push(z); zoneSeq = Math.max(zoneSeq, z.id); });
+if(saved && saved.length) saved.forEach(z => { if(!z.origins) z = {id:z.id, name:z.name, color:z.color, kind:'point', origins:[{lat:z.lat, lng:z.lng, name:z.name}], legs:[{mode:z.mode, min:z.min}]}; if(!z.opts) z.opts = [z.legs]; delete z.legs; zones.push(z); zoneSeq = Math.max(zoneSeq, z.id); });
 renderCityChips(); if(cities.length) updateCommunes();
 refresh(); updateFavCounts(); renderFavs(); loadPoi(); zones.forEach(z => computeZone(z));
 loadData(); resumePolling();
