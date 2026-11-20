@@ -362,6 +362,27 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
   .sync #syncTxt small{font-size:12px}
   .cchip .nbt .ab{display:none}
 
+  /* ---------- Nouveautés, masquées, synchronisation ---------- */
+  .news{margin:12px 20px 0;background:#eef6ff;border:1px solid #cfe3fb;color:#17406b;border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.4}
+  .news b{color:#0f2f52}
+  .news .link{margin-left:4px;color:#1a5fb4}
+  .news.on{background:#17406b;color:#fff;border-color:#17406b}
+  .news.on b{color:#fff}.news.on .link{color:#bfe0ff}
+  .quick{display:flex;gap:8px;align-items:center;padding:0 20px 6px;flex-wrap:wrap}
+  .qchip{height:28px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:0 11px;font-size:12.5px;font-weight:600;color:var(--muted)}
+  .qchip[aria-pressed=true]{background:var(--text);border-color:var(--text);color:#fff}
+  .hid-info{font-size:12px;color:var(--faint)}
+  .hid-info .link,.hid-row .link{font-size:12px}
+  .hid-row{font-size:12.5px;color:var(--muted)}
+  .cloud{margin:12px 20px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--muted);background:#fbfaf8}
+  .cloud b{color:var(--text)}
+  .cloud ol{margin:8px 0;padding-left:18px;line-height:1.5}
+  .cloud ol li{margin-bottom:4px}
+  .cloud input{width:100%;height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;margin:6px 0;font-size:13px}
+  .cloud .err{color:#b42318}
+  .cloud.ok{background:#eef8f5;border-color:#cdebe3;color:#0f5f55}
+  .rbtn.hide-btn svg{width:17px;height:17px}
+
   /* ---------- Mobile ---------- */
   @media (max-width:860px){
     :root{--header:56px}
@@ -426,7 +447,11 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
     .modal-bg.open{align-items:flex-end}
     .m-bar{top:10px;left:10px;right:10px}
     .rbtn{height:36px;padding:0 10px;font-size:13px}
-    .rbtn .fav-txt{display:none}
+    .rbtn .fav-txt,.rbtn .hide-txt{display:none}
+    .news{margin:10px 16px 0}
+    .quick{padding:0 16px 6px}
+    .cloud{margin:10px 16px 0}
+    .cloud input{font-size:16px}
     .m-top>*{min-width:0}
     .m-loc{overflow-wrap:anywhere}
     .m-price{font-size:26px}
@@ -477,6 +502,7 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
         <div class="sync-row"><div id="syncTxt">Chargement des annonces…</div><button class="btn btn-acc" id="refreshBtn" title="Lancer une collecte maintenant et prolonger la collecte automatique d'un mois">↻ Actualiser</button></div>
         <div class="sync-note" id="syncNote" hidden></div>
       </div>
+      <div class="news" id="newsBox" hidden></div>
       <div class="results-h"><b id="resTitle">0 maison</b>
         <label class="sr" for="sort">Trier</label>
         <select id="sort">
@@ -488,6 +514,7 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
           <option value="trip">Trajet le plus court</option>
         </select>
       </div>
+      <div class="quick"><button class="qchip" id="qUnseen" aria-pressed="false">Pas encore vues</button><span class="hid-info" id="hidQuick"></span></div>
       <div class="vis-note" id="visNote"></div>
       <div class="list" id="list"></div>
     </div>
@@ -531,6 +558,8 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
         <div class="frow"><span class="flabel">DPE maximum</span>
           <div class="chips dpe-chips" id="dpe"></div>
         </div>
+        <div class="frow"><label class="switch"><input type="checkbox" id="unseenOnly"> Seulement les annonces pas encore vues</label></div>
+        <div class="frow hid-row" id="hidRow" hidden></div>
         <details class="more-opts"><summary>Plus d'options</summary>
           <div class="frow field"><label for="age">Publiée</label>
             <select id="age"><option value="999">Peu importe</option><option value="1">Depuis 24 h</option><option value="7">Depuis 7 jours</option><option value="30">Depuis 30 jours</option></select>
@@ -551,6 +580,7 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
     </div>
 
     <div class="pane" id="pane-favs" role="tabpanel">
+      <div class="cloud" id="cloudBox"></div>
       <div class="fav-tools">
         <select id="favFilter" aria-label="Filtrer par statut"><option value="">Tous les statuts</option></select>
         <select id="favSort" aria-label="Trier les favoris"><option value="added">Ajoutés récemment</option><option value="pasc">Prix croissant</option><option value="status">Par statut</option></select>
@@ -1032,7 +1062,7 @@ function fraisNotaire(p, neuf){
 /* =========================================================
    État, persistance (navigateur)
    ========================================================= */
-const DEFAULT_F = {pmax:null, smin:null, tmin:null, rooms:0, beds:0, dpe:'G', age:999, outside:false, sort:'recent', match:'any', neighbors:false};
+const DEFAULT_F = {pmax:null, smin:null, tmin:null, rooms:0, beds:0, dpe:'G', age:999, outside:false, unseen:false, sort:'recent', match:'any', neighbors:false};
 const F = Object.assign({}, DEFAULT_F, store.get('filters', {}));
 const WEEK = 7 * 864e5;
 const vus = Object.fromEntries(Object.entries(store.get('vus', {})).filter(([, t]) => Date.now() - t < WEEK));   // annonces ouvertes cette semaine
@@ -1043,6 +1073,11 @@ function markSeen(l){
   document.querySelectorAll(`.card[data-id="${l.id}"]`).forEach(c => { c.classList.add('seen'); const m = c.querySelector('.meta'); if(m && !m.querySelector('.seenpill')) m.insertAdjacentHTML('afterbegin', `<span class="pill seenpill">👁 ${vuTxt(l.id)}</span>`); });
   const pin = document.querySelector(`.price-pin[data-pin="${l.id}"]`); if(pin) pin.classList.add('seen');
 }
+const masques = store.get('masques', {});    // annonces masquées : id -> {t, urls}
+let hiddenUrls = new Set();
+function indexMasques(){ hiddenUrls = new Set(Object.values(masques).flatMap(m => m.urls || [])); }
+indexMasques();
+function isHidden(l){ return !!masques[l.id] || liensOf(l).some(x => hiddenUrls.has(x.url)); }
 let favs = store.get('favs', {});          // id -> {l: copie de l'annonce, added, status, note}
 const STATUSES = {
   new:   {l:'À étudier', c:'st-new'},
@@ -1380,7 +1415,7 @@ function syncFilterInputs(){
   ['pmax','smin','tmin'].forEach(k => $('#' + k).value = F[k] ?? '');
   document.querySelectorAll('#rooms button').forEach(b => b.classList.toggle('on', +b.dataset.v === F.rooms));
   document.querySelectorAll('#beds button').forEach(b => b.classList.toggle('on', +b.dataset.v === F.beds));
-  $('#age').value = F.age; $('#showOutside').checked = F.outside; $('#sort').value = F.sort; paintDpe();
+  $('#age').value = F.age; $('#showOutside').checked = F.outside; $('#sort').value = F.sort; paintDpe(); paintUnseen();
 }
 ['pmax','smin','tmin'].forEach(k => $('#' + k).addEventListener('input', e => { F[k] = e.target.value ? +e.target.value : null; scheduleRender(); }));
 $('#rooms').onclick = e => { const b = e.target.closest('button'); if(!b) return; F.rooms = +b.dataset.v; syncFilterInputs(); renderListings(); };
@@ -1390,7 +1425,7 @@ $('#age').onchange = e => { F.age = +e.target.value; renderListings(); };
 $('#showOutside').onchange = e => { F.outside = e.target.checked; renderListings(); };
 $('#sort').onchange = e => { F.sort = e.target.value; listLimit = 40; renderListings(); };
 $('#resetFilters').onclick = () => { Object.assign(F, DEFAULT_F, {sort:F.sort, match:F.match}); syncFilterInputs(); renderListings(); };
-function activeFilterCount(){ return ['pmax','smin','tmin'].filter(k => F[k] != null).length + (F.rooms ? 1 : 0) + (F.beds ? 1 : 0) + (F.dpe !== 'G' ? 1 : 0) + (F.age < 999 ? 1 : 0); }
+function activeFilterCount(){ return ['pmax','smin','tmin'].filter(k => F[k] != null).length + (F.rooms ? 1 : 0) + (F.beds ? 1 : 0) + (F.dpe !== 'G' ? 1 : 0) + (F.age < 999 ? 1 : 0) + (F.unseen ? 1 : 0); }
 
 function passCriteria(l){
   const ok = (v, min) => v == null || v >= min;      // une information absente de l'annonce ne l'écarte pas
@@ -1417,7 +1452,7 @@ function cardHTML(l, gone){
   const dcol = 'CD'.includes(l.dpe) ? '#1d2433' : '#fff';
   return `<div class="card${gone ? ' gone' : ''}${vus[l.id] ? ' seen' : ''}" data-id="${l.id}" tabindex="0" role="button" aria-label="${l.type}, ${fmt(l.price)} euros, ${l.city}">
     <div class="thumb"><img class="ti" src="${photo(l, 0)}" alt="" loading="lazy" decoding="async">
-      ${!gone && drop(l) > 0 ? `<span class="tag drop">−${short(drop(l))}</span>` : l.days <= 2 && !gone ? '<span class="tag">Nouveau</span>' : ''}
+      ${!gone && drop(l) > 0 ? `<span class="tag drop">−${short(drop(l))}</span>` : (l.days <= 2 || isNew(l)) && !gone ? '<span class="tag">Nouveau</span>' : ''}
       <button class="fav-btn${favs[l.id] ? ' on' : ''}" data-fav="${l.id}" aria-pressed="${!!favs[l.id]}" aria-label="${favs[l.id] ? 'Retirer des' : 'Ajouter aux'} favoris">${HEART}</button>
     </div>
     <div class="card-body">
@@ -1431,8 +1466,11 @@ function pinIcon(l, out){
   return L.divIcon({className:'', iconSize:null, html:`<div class="price-pin${favs[l.id] ? ' fav' : ''}${out ? ' out' : ''}${vus[l.id] ? ' seen' : ''}" data-pin="${l.id}">${short(l.price)}</div>`});
 }
 function renderListings(){
-  const ok = LISTINGS.filter(passCriteria);
-  const inside = ok.filter(l => inArea(l) && inCities(l));
+  const ok = LISTINGS.filter(l => passCriteria(l) && !isHidden(l) && (!F.unseen || !vus[l.id]));
+  let inside = ok.filter(l => inArea(l) && inCities(l));
+  renderNews(inside);
+  if(newsOnly) inside = inside.filter(isNews);
+  renderHidden();
   const sorters = {recent:(a,b)=>a.days-b.days, pasc:(a,b)=>a.price-b.price, pdesc:(a,b)=>b.price-a.price,
                    ppm:(a,b)=>a.price/(a.surf||1e9)-b.price/(b.surf||1e9), surf:(a,b)=>(b.surf||0)-(a.surf||0), trip:(a,b)=>bestTrip(a)-bestTrip(b)};
   inside.sort(sorters[F.sort] || sorters.recent);
@@ -1552,7 +1590,7 @@ $('#favList').addEventListener('click', e => {
 function renderFavs(){
   const el = $('#favList'), items = favEntries();
   if(!Object.keys(favs).length){
-    el.innerHTML = `<div class="empty"><div class="big">♡</div><b>Aucun favori pour l'instant</b>Touchez le cœur d'une annonce pour la garder ici, avec vos notes et son statut. Les favoris restent enregistrés dans ce navigateur.</div>`;
+    el.innerHTML = `<div class="empty"><div class="big">♡</div><b>Aucun favori pour l'instant</b>Touchez le cœur d'une annonce pour la garder ici, avec vos notes et son statut.</div>`;
     return;
   }
   if(!items.length){ el.innerHTML = '<div class="empty">Aucun favori avec ce statut.</div>'; return; }
@@ -1607,7 +1645,14 @@ $('#hdrFavs').onclick = () => { showTab('favs'); if(matchMedia('(max-width:860px
 
 /* Panneau mobile (feuille glissante) */
 let sheet = 'peek';
-function setSheet(s){ sheet = s; document.body.classList.remove('sheet-half', 'sheet-full'); if(s !== 'peek') document.body.classList.add('sheet-' + s); }
+function setSheet(s, fromBack){
+  const was = sheet;
+  if(!fromBack && isMobile()){
+    if(was === 'peek' && s !== 'peek') history.pushState({ci:'sheet'}, '');
+    else if(was !== 'peek' && s === 'peek' && history.state && history.state.ci === 'sheet'){ history.back(); return; }
+  }
+  sheet = s; document.body.classList.remove('sheet-half', 'sheet-full'); if(s !== 'peek') document.body.classList.add('sheet-' + s);
+}
 $('#sheetHandle').onclick = () => setSheet(sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek');
 { // glisser la poignée ou les onglets vers le haut / le bas
   let y0 = null;
@@ -1627,7 +1672,7 @@ let slide = 0, current = null, navList = [], lastFocus = null;
 function openListing(l, list){
   if(!l) return;
   if(list) navList = list;
-  if(!modalBg.classList.contains('open')) lastFocus = document.activeElement;
+  if(!modalBg.classList.contains('open')){ lastFocus = document.activeElement; history.pushState({ci:'fiche'}, ''); }
   current = l; slide = 0; markSeen(l);
   const imgs = Array.from({length:nph(l)}, (_, i) => photo(l, i));
   const liens = liensOf(l);
@@ -1645,6 +1690,7 @@ function openListing(l, list){
       </div>
       <div style="display:flex;gap:6px">
         <button class="rbtn${favs[l.id] ? ' on' : ''}" data-fav="${l.id}" aria-pressed="${!!favs[l.id]}">${HEART}<span class="fav-txt">${favs[l.id] ? 'Enregistrée' : 'Enregistrer'}</span></button>
+        <button class="rbtn hide-btn" id="mHide" aria-label="Masquer cette annonce" title="Ne plus afficher cette annonce"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6C3.9 8.3 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span class="hide-txt">Masquer</span></button>
         <button class="rbtn" id="mClose" aria-label="Fermer">✕</button>
       </div>
     </div>
@@ -1702,7 +1748,8 @@ function openListing(l, list){
   modal.querySelector('.next').onclick = () => go(1);
   modal.querySelector('.thumbs').onclick = e => { if(e.target.dataset.i){ slide = +e.target.dataset.i; updateSlide(); } };
   modal.querySelector('[data-fav]').onclick = () => toggleFav(l.id);
-  $('#mClose').onclick = closeModal;
+  $('#mClose').onclick = () => closeModal();
+  $('#mHide').onclick = () => hideListing(l, idx);
   if($('#mPrev')){ $('#mPrev').onclick = () => openListing(navList[idx - 1]); $('#mNext').onclick = () => openListing(navList[idx + 1]); }
   $('#centerOn').onclick = () => { closeModal(); map.flyTo([l.lat, l.lng], 16, {duration:.6}); if(matchMedia('(max-width:860px)').matches) setSheet('peek'); };
   let x0 = null; const car = modal.querySelector('.carousel');
@@ -1721,7 +1768,14 @@ function updateSlide(){
   modal.querySelector('.idx').textContent = `${slide + 1} / ${nph(current)}`;
   modal.querySelectorAll('.thumbs img').forEach((t, i) => t.classList.toggle('on', i === slide));
 }
-function closeModal(){ modalBg.classList.remove('open'); document.body.style.overflow = ''; current = null; if(lastFocus && lastFocus.focus) lastFocus.focus(); }
+function closeModal(fromBack){
+  if(!fromBack && history.state && history.state.ci === 'fiche'){ history.back(); return; }   // la fermeture passe par l'historique
+  modalBg.classList.remove('open'); document.body.style.overflow = ''; current = null; if(lastFocus && lastFocus.focus) lastFocus.focus();
+}
+window.addEventListener('popstate', () => {
+  if(modalBg.classList.contains('open')) closeModal(true);
+  else if(sheet !== 'peek') setSheet('peek', true);
+});
 modalBg.addEventListener('click', e => { if(e.target === modalBg) closeModal(); });
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape'){ if(current) closeModal(); else if(addMode) setAddMode(false); return; }
@@ -1932,8 +1986,9 @@ $('#lockForm').onsubmit = e => {
   const m = v.match(/cle=([^&\s]+)/); KEY = m ? decodeURIComponent(m[1]) : v;      // on accepte aussi le lien complet
   store.set('cle', KEY); $('#lock').hidden = true; loadData();
 };
-$('#forgetKey').onclick = () => { try { localStorage.removeItem('carteimmo2.cle'); } catch(_) {} KEY = null; location.reload(); };
+$('#forgetKey').onclick = () => { try { localStorage.removeItem('carteimmo2.cle'); localStorage.removeItem('carteimmo2.jeton'); } catch(_) {} KEY = null; location.reload(); };
 
+let syncStarted = false;
 async function loadData(){
   if(!window.crypto || !crypto.subtle || !window.DecompressionStream){ setSyncTxt('<b>Navigateur trop ancien</b><br><small>Mettez à jour votre navigateur pour afficher les annonces.</small>'); return false; }
   if(!KEY){ setSyncTxt('<b>Mot de passe requis</b>'); showLock(); return false; }
@@ -1956,7 +2011,8 @@ async function loadData(){
     LISTINGS.length = 0; LISTINGS.push(...d.annonces);
     LISTINGS.forEach(l => { if(favs[l.id]) favs[l.id].l = snapshot(l); });     // favoris : prix et photos à jour
     store.set('favs', favs);
-    renderListings(); renderFavs();
+    updateVisits(); renderListings(); renderFavs();
+    if(!syncStarted){ syncStarted = true; startSync(); }
   }
   renderSync();
   return changed;
@@ -2028,9 +2084,205 @@ function startPolling(){
 function resumePolling(){ if(Date.now() - store.get('pending', 0) < 30 * 60e3) startPolling(); }
 
 /* =========================================================
+   Nouveautés depuis la dernière visite
+   ========================================================= */
+let visitBase = null, newsOnly = false;
+function updateVisits(){
+  const v = store.get('visites', null), now = Date.now(), ids = Object.fromEntries(LISTINGS.map(l => [l.id, l.price]));
+  const nouvelle = !v || now - v.last > 3 * 3600e3;          // plus de 3 h sans ouvrir la carte = nouvelle visite
+  const w = {base: v ? (nouvelle ? v.cur : v.base) : null, cur: {t: now, ids}, last: now};
+  store.set('visites', w); visitBase = w.base;
+}
+document.addEventListener('visibilitychange', () => { const v = store.get('visites', null); if(v && DATA){ v.last = Date.now(); store.set('visites', v); } });
+const isNew = l => !!visitBase && !(l.id in visitBase.ids);
+const isDropped = l => !!visitBase && l.id in visitBase.ids && l.price < visitBase.ids[l.id];
+const isNews = l => isNew(l) || isDropped(l);
+function renderNews(inside){
+  const box = $('#newsBox');
+  if(!visitBase){ box.hidden = true; return; }
+  const nn = inside.filter(isNew).length, nd = inside.filter(isDropped).length;
+  if(!nn && !nd && !newsOnly){ box.hidden = true; return; }
+  const quand = new Date(visitBase.t).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+  const parts = [nn ? `<b>${nn} nouvelle${nn > 1 ? 's' : ''} annonce${nn > 1 ? 's' : ''}</b>` : '', nd ? `<b>${nd} baisse${nd > 1 ? 's' : ''} de prix</b>` : ''].filter(Boolean).join(' et ');
+  box.hidden = false; box.classList.toggle('on', newsOnly);
+  box.innerHTML = newsOnly ? `Seulement les nouveautés depuis votre visite du ${quand}. <button class="link" id="newsAll">Tout voir</button>`
+    : `Depuis votre visite du ${quand} : ${parts || 'rien de nouveau'}. <button class="link" id="newsOnly">Voir seulement celles-ci</button>`;
+  const b = $('#newsAll') || $('#newsOnly');
+  b.onclick = () => { newsOnly = !newsOnly; listLimit = 40; renderListings(); $('#pane-search').scrollTop = 0; };
+}
+
+/* Annonces masquées */
+function hideListing(l, idx){
+  masques[l.id] = {t: Date.now(), urls: liensOf(l).map(x => x.url)};
+  store.set('masques', masques); indexMasques();
+  const next = navList[idx + 1] && !isHidden(navList[idx + 1]) ? navList[idx + 1] : null;
+  if(next) openListing(next); else closeModal();
+  renderListings();
+  toast('Annonce masquée : elle ne s\'affichera plus', () => { unhide([l.id]); });
+}
+function unhide(ids){
+  ids.forEach(id => delete masques[id]);
+  store.set('masques', masques); indexMasques(); renderListings();
+}
+function renderHidden(){
+  const n = Object.keys(masques).length;
+  const h = n ? `${n} annonce${n > 1 ? 's' : ''} masquée${n > 1 ? 's' : ''} · <button class="link" id="unhideAll">Tout réafficher</button>` : '';
+  $('#hidRow').hidden = !n; $('#hidRow').innerHTML = h; $('#hidQuick').innerHTML = n ? `${n} masquée${n > 1 ? 's' : ''}` : '';
+  const b = $('#unhideAll'); if(b) b.onclick = () => { const ids = Object.keys(masques); unhide(ids); toast(`${ids.length} annonce${ids.length > 1 ? 's' : ''} réaffichée${ids.length > 1 ? 's' : ''}`); };
+}
+
+/* Pas encore vues */
+function paintUnseen(){ $('#unseenOnly').checked = !!F.unseen; $('#qUnseen').setAttribute('aria-pressed', !!F.unseen); }
+$('#unseenOnly').onchange = e => { F.unseen = e.target.checked; paintUnseen(); listLimit = 40; renderListings(); };
+$('#qUnseen').onclick = () => { F.unseen = !F.unseen; paintUnseen(); listLimit = 40; renderListings(); };
+
+/* =========================================================
+   Favoris, annonces vues et masquées : partagés entre appareils
+   Fichier chiffré perso/donnees.enc dans le dépôt, écrit avec un jeton GitHub
+   limité à ce dépôt. Le jeton lui-même est rangé chiffré (perso/jeton.enc) :
+   il suffit de le donner sur un appareil, les autres le retrouvent avec le mot de passe.
+   ========================================================= */
+const SYNC_PATH = 'perso/donnees.enc', JETON_PATH = 'perso/jeton.enc';
+const TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new?name=Carte+immo&description=Favoris+de+la+carte+immo&target_name=Orecrea&expires_in=none&contents=write';
+const meta = Object.assign({favT:{}, favDel:{}, masqDel:{}}, store.get('syncMeta', {}));
+const favSig = f => JSON.stringify([f.added, f.status, f.note || '']);
+let favPrev = {}, masqPrev = new Set();
+function snapPrev(){ favPrev = Object.fromEntries(Object.entries(favs).map(([id, f]) => [id, favSig(f)])); masqPrev = new Set(Object.keys(masques)); }
+snapPrev();
+let jeton = store.get('jeton', null), syncTimer = null, syncing = false, syncAgain = false, syncErr = '', lastSync = store.get('lastSync', 0);
+const rawSet = store.set;
+store.set = (k, v) => {            // chaque changement local est daté, pour savoir qui gagne entre deux appareils
+  rawSet(k, v);
+  const now = Date.now();
+  if(k === 'favs'){
+    const next = {};
+    for(const [id, f] of Object.entries(favs)){ next[id] = favSig(f); if(favPrev[id] !== next[id]){ meta.favT[id] = now; delete meta.favDel[id]; } }
+    for(const id in favPrev) if(!(id in next)){ meta.favDel[id] = now; delete meta.favT[id]; }
+    favPrev = next;
+  } else if(k === 'masques'){
+    for(const id of masqPrev) if(!masques[id]) meta.masqDel[id] = now;
+    for(const id in masques) delete meta.masqDel[id];
+    masqPrev = new Set(Object.keys(masques));
+  } else if(k !== 'vus') return;
+  rawSet('syncMeta', meta); syncSoon();
+};
+function syncSoon(ms = 3000){ if(!jeton) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, ms); }
+const favTime = (doc, id) => (doc.favT || {})[id] || doc.favs[id].added || 1;
+function canon(d){
+  return JSON.stringify([Object.keys(d.favs || {}).sort().map(id => [id, favSig(d.favs[id]), (d.favT || {})[id] || 0]),
+    Object.entries(d.favDel || {}).sort(), Object.entries(d.vus || {}).sort(), Object.keys(d.masques || {}).sort(), Object.entries(d.masqDel || {}).sort()]);
+}
+const localDoc = () => ({v:1, favs, favT:meta.favT, favDel:meta.favDel, vus, masques, masqDel:meta.masqDel});
+function mergeDoc(r){
+  let changed = false;
+  r.favs = r.favs || {}; r.favDel = r.favDel || {}; r.masques = r.masques || {}; r.masqDel = r.masqDel || {};
+  for(const id of new Set([...Object.keys(r.favs), ...Object.keys(r.favDel)])){
+    const lt = favs[id] ? favTime(localDoc(), id) : 0, ld = meta.favDel[id] || 0;
+    const rt = r.favs[id] ? favTime(r, id) : 0, rd = r.favDel[id] || 0;
+    if(rt && rt > lt && rt > ld && rt >= rd){
+      const f = r.favs[id], l = LISTINGS.find(x => x.id == id); if(l) f.l = snapshot(l);
+      if(!favs[id] || favSig(favs[id]) !== favSig(f)) changed = true;
+      favs[id] = f; meta.favT[id] = rt; delete meta.favDel[id];
+    } else if(rd && rd > lt && rd > ld){ if(favs[id]){ delete favs[id]; changed = true; } meta.favDel[id] = rd; delete meta.favT[id]; }
+  }
+  for(const [id, t] of Object.entries(r.vus || {})) if(Date.now() - t < WEEK && (vus[id] || 0) < t){ if(!vus[id]) changed = true; vus[id] = t; }
+  for(const id of new Set([...Object.keys(r.masques), ...Object.keys(r.masqDel)])){
+    const lt = masques[id] ? masques[id].t : 0, ld = meta.masqDel[id] || 0, rt = r.masques[id] ? r.masques[id].t : 0, rd = r.masqDel[id] || 0;
+    if(rt && rt > lt && rt > ld){ masques[id] = r.masques[id]; delete meta.masqDel[id]; changed = true; }
+    else if(rd && rd > lt && rd > ld){ if(masques[id]){ delete masques[id]; changed = true; } meta.masqDel[id] = rd; }
+  }
+  const old = Date.now() - 90 * 864e5;
+  for(const k of ['favDel', 'masqDel']) for(const [id, t] of Object.entries(meta[k])) if(t < old) delete meta[k][id];
+  for(const [id, t] of Object.entries(vus)) if(Date.now() - t > WEEK) delete vus[id];
+  return changed;
+}
+function applyRemote(){
+  rawSet('favs', favs); rawSet('vus', vus); rawSet('masques', masques); rawSet('syncMeta', meta);
+  snapPrev(); indexMasques(); updateFavCounts(); renderFavs(); renderListings();
+}
+async function gh(path, opt = {}){
+  return fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, Object.assign({cache:'no-store'}, opt,
+    {headers:{Authorization:'Bearer ' + jeton, Accept:'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28'}}));
+}
+async function ghPut(path, txt, sha, message){
+  return gh(path, {method:'PUT', body:JSON.stringify(Object.assign({message, content:btoa(txt), branch:'main'}, sha ? {sha} : {}))});
+}
+async function syncNow(){
+  if(!jeton || !KEY || !DATA) return;
+  if(syncing){ syncAgain = true; return; }
+  syncing = true; clearTimeout(syncTimer);
+  try {
+    for(let essai = 0; essai < 3; essai++){
+      const g = await gh(SYNC_PATH + '?ref=main');
+      if(g.status === 401){ throw Object.assign(new Error(), {jeton:true}); }
+      let sha = null, remote = null;
+      if(g.ok){ const j = await g.json(); sha = j.sha; remote = await decryptJSON(atob(j.content.replace(/\s/g, '')), KEY); }
+      else if(g.status !== 404) throw new Error('GitHub ' + g.status);
+      if(remote && mergeDoc(remote)) applyRemote();
+      if(remote && canon(remote) === canon(localDoc())) break;          // déjà à jour : rien à écrire
+      const p = await ghPut(SYNC_PATH, await encryptJSON(localDoc(), KEY), sha, 'Favoris synchronisés');
+      if(p.ok) break;
+      if(p.status === 401 || p.status === 403) throw Object.assign(new Error(), {jeton:true});
+      if(p.status !== 409 && p.status !== 422) throw new Error('GitHub ' + p.status);   // conflit : un autre appareil vient d'écrire, on recommence
+    }
+    lastSync = Date.now(); rawSet('lastSync', lastSync); syncErr = '';
+  } catch(e){
+    if(e.jeton){ syncErr = 'Le code GitHub n\'est plus accepté (expiré ou supprimé). Créez-en un nouveau ci-dessous.'; jeton = null; try { localStorage.removeItem('carteimmo2.jeton'); } catch(_) {} }
+    else syncErr = 'Synchronisation impossible pour le moment, nouvel essai plus tard.';
+  } finally {
+    syncing = false; renderCloud();
+    if(syncAgain){ syncAgain = false; syncSoon(1000); }
+  }
+}
+async function fetchSharedJeton(){
+  try {
+    const r = await fetch(`https://raw.githubusercontent.com/${REPO}/main/${JETON_PATH}?t=${Date.now()}`, {cache:'no-store'});
+    return r.ok ? (await decryptJSON(await r.text(), KEY)).jeton : null;
+  } catch(_) { return null; }
+}
+async function activateSync(tok){
+  const prev = jeton; jeton = tok.trim();
+  try {
+    const g = await gh(JETON_PATH + '?ref=main');
+    if(g.status === 401) throw new Error('Ce code n\'est pas reconnu par GitHub. Vérifiez qu\'il a été copié en entier.');
+    const sha = g.ok ? (await g.json()).sha : null;
+    const p = await ghPut(JETON_PATH, await encryptJSON({jeton}, KEY), sha, 'Partage des favoris entre appareils');
+    if(!p.ok) throw new Error(p.status === 403 || p.status === 404 ? 'Ce code n\'a pas le droit d\'écrire dans carte-immo. Refaites-le en choisissant bien le dépôt carte-immo et « Contents : Read and write ».' : 'GitHub ne répond pas, réessayez dans un instant.');
+    rawSet('jeton', jeton); syncErr = ''; renderCloud(); await syncNow(); toast('Favoris partagés entre vos appareils');
+  } catch(e){ jeton = prev; syncErr = e.message; renderCloud(); }
+}
+function renderCloud(){
+  const el = $('#cloudBox');
+  if(jeton){
+    const t = lastSync ? new Date(lastSync).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) : '';
+    el.className = 'cloud ok';
+    el.innerHTML = syncErr ? `<span class="err">${esc(syncErr)}</span>` : `☁️ Favoris, annonces vues et masquées partagés entre vos appareils${t ? ` · à jour à ${t}` : ''}`;
+    return;
+  }
+  el.className = 'cloud';
+  el.innerHTML = `<b>Retrouver vos favoris sur tous vos appareils</b> <button class="link" id="cloudOpen">Activer</button>
+    <div id="cloudSteps" hidden><ol>
+      <li><a href="${TOKEN_URL}" target="_blank" rel="noopener">Ouvrez cette page GitHub</a>. Vérifiez : dépôt <b>carte-immo</b> seulement (« Only select repositories »), droit <b>Contents : Read and write</b>, durée la plus longue possible.</li>
+      <li>Cliquez sur « Generate token » en bas, puis copiez le code qui commence par <b>github_pat_</b>.</li>
+      <li>Collez-le ici :<input id="cloudTok" placeholder="github_pat_…" autocomplete="off" spellcheck="false"><button class="btn btn-acc" id="cloudGo">Activer le partage</button></li>
+    </ol><small>À faire une seule fois, sur un seul appareil : les autres le retrouvent tout seuls grâce au mot de passe de la carte. Le code est gardé chiffré.</small></div>
+    ${syncErr ? `<div class="err">${esc(syncErr)}</div>` : ''}`;
+  $('#cloudOpen').onclick = () => { $('#cloudSteps').hidden = !$('#cloudSteps').hidden; };
+  $('#cloudGo').onclick = () => { const v = $('#cloudTok').value; if(v.trim().length < 20){ syncErr = 'Collez le code GitHub en entier.'; renderCloud(); $('#cloudSteps').hidden = false; return; } $('#cloudGo').disabled = true; $('#cloudGo').textContent = 'Vérification…'; activateSync(v); };
+  if(syncErr) $('#cloudSteps').hidden = false;
+}
+async function startSync(){
+  if(!jeton) jeton = await fetchSharedJeton();
+  if(jeton){ rawSet('jeton', jeton); await syncNow(); }
+  renderCloud();
+}
+document.addEventListener('visibilitychange', () => { if(!document.hidden && jeton && Date.now() - lastSync > 60e3) syncNow(); });
+setInterval(() => { if(!document.hidden && jeton) syncNow(); }, 5 * 60e3);
+
+/* =========================================================
    Démarrage
    ========================================================= */
-syncFilterInputs();
+syncFilterInputs(); paintUnseen(); renderCloud();
 showTab(store.get('tab', 'search'));
 for(const k of Object.keys(favs)) if(/^\d+$/.test(k)) delete favs[k];   // favoris des annonces fictives de la version d'essai
 store.set('favs', favs);
