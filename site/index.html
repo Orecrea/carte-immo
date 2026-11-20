@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carte immo</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <script>/* secours si cdnjs est inaccessible */
 window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');
 </script>
@@ -344,6 +346,22 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
   .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
   .toast button{border:0;background:none;color:#ffb199;font-weight:700;padding:0}
 
+  /* ---------- Vignettes, annonces vues, onglet Filtres ---------- */
+  .thumb img.ti{width:100%;height:100%;object-fit:cover;display:block}
+  .card.seen .thumb img.ti{opacity:.72}
+  .card.seen .price{color:#4a5263}
+  .pill.seenpill{background:#eef0f3;color:#5b6474;font-weight:600}
+  .price-pin.seen{background:#eef0f3;color:#5b6474}
+  .price-pin.seen.hl,.price-pin.seen:hover{background:var(--text);color:#fff}
+  .tab .badge[hidden]{display:none}
+  .more-opts.first summary{margin-top:0}
+  .filters-done{position:sticky;bottom:0;padding:12px 20px;background:linear-gradient(transparent,var(--panel) 30%);display:flex;justify-content:center}
+  .filters-done .btn{height:42px;padding:0 22px;border-radius:999px}
+  .sync{padding:12px 20px}
+  .sync #syncTxt{min-width:0;line-height:1.35}
+  .sync #syncTxt small{font-size:12px}
+  .cchip .nbt .ab{display:none}
+
   /* ---------- Mobile ---------- */
   @media (max-width:860px){
     :root{--header:56px}
@@ -373,7 +391,56 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
       .logo{display:none}
     body.sheet-half .map-wrap .leaflet-bottom,body.sheet-full .map-wrap .leaflet-bottom{display:none}
     .city-box input{min-width:90px}
-    .map-wrap .leaflet-bottom{bottom:124px}
+    .map-wrap .leaflet-bottom{bottom:88px}
+    /* en-tête : la zone des villes prend toute la largeur */
+    #hdrFavs{display:none}
+    .search{max-width:none;min-width:0}
+    .cchip{font-size:12.5px;padding-left:8px}
+    .cchip .nbt{padding:0 6px;margin-left:2px}
+    .cchip .nbt .fl{display:none}
+    .cchip .nbt .ab{display:inline}
+    .city-box{padding-left:34px}
+    .suggest button{padding:12px 14px}
+    /* feuille : la poignée et les onglets restent visibles, la liste juste dessous */
+    #panel{transform:translateY(calc(100% - 84px));height:calc(100% - 8px)}
+    body.sheet-half #panel{transform:translateY(42%)}
+    .sheet-handle{padding:10px 0 4px;touch-action:none}
+    .tabs{padding:0 8px;justify-content:space-around;touch-action:pan-x}
+    .tab{flex:1;justify-content:center;padding:10px 4px 12px}
+    .block{padding:14px 16px}
+    .sync{padding:10px 16px}
+    .results-h{padding:12px 16px 6px}
+    .vis-note{padding:0 16px 4px}
+    .list{padding:4px 8px 24px}
+    .thumb{width:112px;height:88px}
+    .card .price{font-size:15px}
+    .dest-row{flex-wrap:wrap}
+    .dest-row .btn-gares{width:100%;justify-content:center}
+    .grid2{gap:8px}
+    .field input,.field select{height:42px;font-size:16px}
+    .dest input{font-size:16px}
+    .city-box input{font-size:16px}
+    .chips button{height:34px}
+    /* fiche annonce */
+    .modal{overflow-x:hidden;max-height:94dvh;max-height:94vh}
+    .modal-bg.open{align-items:flex-end}
+    .m-bar{top:10px;left:10px;right:10px}
+    .rbtn{height:36px;padding:0 10px;font-size:13px}
+    .rbtn .fav-txt{display:none}
+    .m-top>*{min-width:0}
+    .m-loc{overflow-wrap:anywhere}
+    .m-price{font-size:26px}
+    .m-title{font-size:17px}
+    .facts{grid-template-columns:repeat(2,1fr);margin:14px 0}
+    .m-desc{max-height:none}
+    .m-actions{position:sticky;bottom:0;background:#fff;margin:16px -16px 0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -4px 12px rgba(16,24,40,.08)}
+    .m-actions a,.m-actions button{min-width:0;flex:1 1 100%;padding:12px}
+    .m-actions .ghost#centerOn{display:none}
+    body.sheet-full .map-wrap .leaflet-top{display:none}
+    .toast{top:calc(var(--header) + 10px);bottom:auto;transform:translate(-50%,-20px);max-width:calc(100vw - 32px)}
+    .sync #syncTxt{font-size:13px}
+    .sync-note{font-size:12px;margin-top:8px;padding:7px 9px}
+    .costs .row{flex-wrap:wrap}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -398,9 +465,10 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
 
 <main>
   <aside id="panel" aria-label="Recherche et annonces">
-    <button class="sheet-handle" id="sheetHandle" aria-label="Agrandir ou réduire le panneau"><span id="sheetLabel">Annonces</span></button>
+    <button class="sheet-handle" id="sheetHandle" aria-label="Agrandir ou réduire la liste"></button>
     <div class="tabs" role="tablist">
       <button class="tab on" role="tab" data-tab="search" aria-selected="true">Annonces <span class="badge" id="nbTab">0</span></button>
+      <button class="tab" role="tab" data-tab="filters" aria-selected="false">Filtres <span class="badge" id="fTab" hidden>0</span></button>
       <button class="tab" role="tab" data-tab="favs" aria-selected="false">Favoris <span class="badge" id="favCountTab">0</span></button>
     </div>
 
@@ -408,12 +476,23 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
       <div class="block sync" id="syncBox">
         <div class="sync-row"><div id="syncTxt">Chargement des annonces…</div><button class="btn btn-acc" id="refreshBtn" title="Lancer une collecte maintenant et prolonger la collecte automatique d'un mois">↻ Actualiser</button></div>
         <div class="sync-note" id="syncNote" hidden></div>
-        <details class="more-opts" id="otherBox"><summary>Chercher aussi sur Leboncoin, SeLoger, PAP…</summary>
-          <p class="other-help">Ces sites refusent la collecte automatique. Ces liens ouvrent directement leur recherche de maisons pour chacune de vos villes.</p>
-          <div id="otherLinks"></div></details>
-        <details class="more-opts" id="srcBox"><summary>Sites consultés</summary><ul class="src-list" id="srcList"></ul>
-          <button class="link" id="forgetKey">Oublier le mot de passe sur cet appareil</button></details>
       </div>
+      <div class="results-h"><b id="resTitle">0 maison</b>
+        <label class="sr" for="sort">Trier</label>
+        <select id="sort">
+          <option value="recent">Plus récentes</option>
+          <option value="pasc">Prix croissant</option>
+          <option value="pdesc">Prix décroissant</option>
+          <option value="ppm">Prix au m² croissant</option>
+          <option value="surf">Plus grandes</option>
+          <option value="trip">Trajet le plus court</option>
+        </select>
+      </div>
+      <div class="vis-note" id="visNote"></div>
+      <div class="list" id="list"></div>
+    </div>
+
+    <div class="pane" id="pane-filters" role="tabpanel">
       <div class="block">
         <div class="block-h"><h2>Temps de trajet jusqu'à…</h2><button class="link" id="addZone">Placer sur la carte</button></div>
         <div class="dest-row">
@@ -460,19 +539,15 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
         </details>
       </div>
 
-      <div class="results-h"><b id="resTitle">0 maison</b>
-        <label class="sr" for="sort">Trier</label>
-        <select id="sort">
-          <option value="recent">Plus récentes</option>
-          <option value="pasc">Prix croissant</option>
-          <option value="pdesc">Prix décroissant</option>
-          <option value="ppm">Prix au m² croissant</option>
-          <option value="surf">Plus grandes</option>
-          <option value="trip">Trajet le plus court</option>
-        </select>
+      <div class="block">
+        <div class="block-h"><h2>Autres sites</h2></div>
+        <details class="more-opts first" id="otherBox"><summary>Chercher aussi sur Leboncoin, SeLoger, PAP…</summary>
+          <p class="other-help">Ces sites refusent la collecte automatique. Ces liens ouvrent directement leur recherche de maisons pour chacune de vos villes.</p>
+          <div id="otherLinks"></div></details>
+        <details class="more-opts" id="srcBox"><summary>Sites consultés</summary><ul class="src-list" id="srcList"></ul>
+          <button class="link" id="forgetKey">Oublier le mot de passe sur cet appareil</button></details>
       </div>
-      <div class="vis-note" id="visNote"></div>
-      <div class="list" id="list"></div>
+      <div class="filters-done"><button class="btn btn-acc" id="seeResults">Voir les annonces</button></div>
     </div>
 
     <div class="pane" id="pane-favs" role="tabpanel">
@@ -545,9 +620,16 @@ function short(n){return n>=1e6 ? (n/1e6).toFixed(2).replace('.',',').replace(/,
 /* =========================================================
    Carte
    ========================================================= */
+const store = {
+  get(k, d){ try { const v = localStorage.getItem('carteimmo2.' + k); return v ? JSON.parse(v) : d; } catch(_) { return d; } },
+  set(k, v){ try { localStorage.setItem('carteimmo2.' + k, JSON.stringify(v)); } catch(_) {} }
+};
 const map = L.map('map', {
   maxBounds: FRANCE.pad(0.05), maxBoundsViscosity: 1, minZoom: 5, zoomControl: false
-}).setView(PARIS, 11);
+});
+const savedView = store.get('vue', null);
+if(savedView && savedView.c) map.setView(savedView.c, savedView.z, {animate:false}); else map.setView(PARIS, 11);
+map.on('moveend', () => { const c = map.getCenter(); store.set('vue', {c:[+c.lat.toFixed(5), +c.lng.toFixed(5)], z:map.getZoom()}); });
 L.control.zoom({position:'bottomright'}).addTo(map);
 L.control.scale({imperial:false, position:'bottomleft'}).addTo(map);
 
@@ -625,6 +707,8 @@ const LAYERS = {
               desc:'Centres sportifs, piscines, aires de jeux, MJC, médiathèques, écoles de musique et de danse'}
 };
 Object.values(LAYERS).forEach(c => c.group = L.layerGroup().addTo(map));
+store.get('couches', []).forEach(k => { if(LAYERS[k]) LAYERS[k].on = true; });
+const saveLayers = () => store.set('couches', Object.keys(LAYERS).filter(k => LAYERS[k].on));
 const LAYERS_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="m2 13 10 5 10-5"/><path d="m2 17.5 10 5 10-5" opacity=".55"/></svg>';
 
 /* Risque inondation */
@@ -674,7 +758,8 @@ const SeaLevel = L.GridLayer.extend({
 });
 const seaLayer = new SeaLevel();
 
-const FLOOD = {on:false, mode:'tri', scen:2, sea:2};
+const FLOOD = Object.assign({on:false, mode:'tri', scen:2, sea:2}, store.get('inondation', {}));
+const saveFlood = () => store.set('inondation', FLOOD);
 function applyFlood(){
   floodWms.forEach(l => map.removeLayer(l)); map.removeLayer(seaLayer);
   if(!FLOOD.on) return;
@@ -739,22 +824,30 @@ document.querySelectorAll('[data-layer]').forEach(cb => cb.onchange = () => {
   if(k === 'transports' || k === 'velo') syncPt();
   // couche activée trop loin : on rapproche la carte pour qu'elle s'affiche tout de suite
   if(cb.checked && map.getZoom() < LAYERS[k].minZoom){ map.setZoom(LAYERS[k].minZoom); toast(`Carte rapprochée pour afficher : ${LAYERS[k].label.toLowerCase()}`); }
-  poiKey = ''; loadPoi();
+  poiKey = ''; loadPoi(); saveLayers();
 });
-document.getElementById('floodOn').onchange = e => { FLOOD.on = e.target.checked; document.getElementById('floodBox').classList.toggle('on', FLOOD.on); applyFlood(); };
+document.getElementById('floodOn').onchange = e => { FLOOD.on = e.target.checked; document.getElementById('floodBox').classList.toggle('on', FLOOD.on); applyFlood(); saveFlood(); };
 document.querySelectorAll('[name=fmode]').forEach(r => r.onchange = () => {
   FLOOD.mode = r.value;
   document.getElementById('triBox').style.display = FLOOD.mode === 'tri' ? '' : 'none';
   document.getElementById('seaBox').style.display = FLOOD.mode === 'sea' ? '' : 'none';
-  applyFlood();
+  applyFlood(); saveFlood();
 });
-document.getElementById('scen').oninput = e => { FLOOD.scen = +e.target.value; renderTriLegend(); applyFlood(); };
-document.getElementById('sea').oninput = e => { FLOOD.sea = +e.target.value; document.getElementById('seaVal').textContent = '+' + String(FLOOD.sea).replace('.',',') + ' m'; if(FLOOD.on) seaLayer.setLevel(FLOOD.sea); };
+document.getElementById('scen').oninput = e => { FLOOD.scen = +e.target.value; renderTriLegend(); applyFlood(); saveFlood(); };
+document.getElementById('sea').oninput = e => { FLOOD.sea = +e.target.value; document.getElementById('seaVal').textContent = '+' + String(FLOOD.sea).replace('.',',') + ' m'; if(FLOOD.on) seaLayer.setLevel(FLOOD.sea); saveFlood(); };
+// réglages retrouvés de la dernière visite
+document.getElementById('floodOn').checked = FLOOD.on; document.getElementById('floodBox').classList.toggle('on', FLOOD.on);
+document.querySelector(`[name=fmode][value=${FLOOD.mode}]`).checked = true;
+document.getElementById('triBox').style.display = FLOOD.mode === 'tri' ? '' : 'none';
+document.getElementById('seaBox').style.display = FLOOD.mode === 'sea' ? '' : 'none';
+document.getElementById('scen').value = FLOOD.scen; document.getElementById('sea').value = FLOOD.sea;
+document.getElementById('seaVal').textContent = '+' + String(FLOOD.sea).replace('.',',') + ' m';
+applyFlood();
 renderTriLegend();
 document.querySelectorAll('[name=base]').forEach(r => r.onchange = () => {
   setBase(r.value, false); try { localStorage.setItem('carteimmo2.base', JSON.stringify(r.value)); } catch(_) {}
 });
-setBase(baseKey, true);
+setBase(baseKey, true); syncPt();
 
 /* =========================================================
    Arrêts de transport (données OSM réelles via Overpass)
@@ -764,8 +857,11 @@ const OVERPASS = OVERPASS_URLS[0];
 async function overpass(q, signal){
   let err;
   for(const u of OVERPASS_URLS){
-    try { const r = await fetch(u, {method:'POST', body:'data=' + encodeURIComponent(q), signal}); if(r.ok) return await r.json(); err = new Error('HTTP ' + r.status); }
-    catch(e){ if(e.name === 'AbortError') throw e; err = e; }
+    const c = new AbortController(), t = setTimeout(() => c.abort(), 15000);
+    const relay = () => c.abort(); if(signal) signal.addEventListener('abort', relay);
+    try { const r = await fetch(u, {method:'POST', body:'data=' + encodeURIComponent(q), signal:c.signal}); if(r.ok) return await r.json(); err = new Error('HTTP ' + r.status); }
+    catch(e){ if(signal && signal.aborted) throw e; err = e; }
+    finally { clearTimeout(t); if(signal) signal.removeEventListener('abort', relay); }
   }
   throw err;
 }
@@ -936,12 +1032,17 @@ function fraisNotaire(p, neuf){
 /* =========================================================
    État, persistance (navigateur)
    ========================================================= */
-const store = {
-  get(k, d){ try { const v = localStorage.getItem('carteimmo2.' + k); return v ? JSON.parse(v) : d; } catch(_) { return d; } },
-  set(k, v){ try { localStorage.setItem('carteimmo2.' + k, JSON.stringify(v)); } catch(_) {} }
-};
 const DEFAULT_F = {pmax:null, smin:null, tmin:null, rooms:0, beds:0, dpe:'G', age:999, outside:false, sort:'recent', match:'any', neighbors:false};
 const F = Object.assign({}, DEFAULT_F, store.get('filters', {}));
+const WEEK = 7 * 864e5;
+const vus = Object.fromEntries(Object.entries(store.get('vus', {})).filter(([, t]) => Date.now() - t < WEEK));   // annonces ouvertes cette semaine
+const vuTxt = id => { const d = Date.now() - vus[id]; if(d < 864e5 && new Date(vus[id]).getDate() === new Date().getDate()) return 'Vue aujourd\'hui'; return 'Vue ' + new Date(vus[id]).toLocaleDateString('fr-FR', {weekday:'long'}); };
+function markSeen(l){
+  const first = !vus[l.id]; vus[l.id] = Date.now(); store.set('vus', vus);
+  if(!first) return;
+  document.querySelectorAll(`.card[data-id="${l.id}"]`).forEach(c => { c.classList.add('seen'); const m = c.querySelector('.meta'); if(m && !m.querySelector('.seenpill')) m.insertAdjacentHTML('afterbegin', `<span class="pill seenpill">👁 ${vuTxt(l.id)}</span>`); });
+  const pin = document.querySelector(`.price-pin[data-pin="${l.id}"]`); if(pin) pin.classList.add('seen');
+}
 let favs = store.get('favs', {});          // id -> {l: copie de l'annonce, added, status, note}
 const STATUSES = {
   new:   {l:'À étudier', c:'st-new'},
@@ -1314,8 +1415,8 @@ function cardHTML(l, gone){
   const hits = zones.length ? zoneHits(l) : [];
   const trips = hits.slice(0, 2).map(z => { const n = nearestOrigin(z, l); return `<span class="pill trip" style="--c:${z.color}">${legsLabel(z)} · ${esc((n.o.name || z.name).split(',')[0])}</span>`; }).join('');
   const dcol = 'CD'.includes(l.dpe) ? '#1d2433' : '#fff';
-  return `<div class="card${gone ? ' gone' : ''}" data-id="${l.id}" tabindex="0" role="button" aria-label="${l.type}, ${fmt(l.price)} euros, ${l.city}">
-    <div class="thumb" style="background-image:url('${photo(l, 0)}')">
+  return `<div class="card${gone ? ' gone' : ''}${vus[l.id] ? ' seen' : ''}" data-id="${l.id}" tabindex="0" role="button" aria-label="${l.type}, ${fmt(l.price)} euros, ${l.city}">
+    <div class="thumb"><img class="ti" src="${photo(l, 0)}" alt="" loading="lazy" decoding="async">
       ${!gone && drop(l) > 0 ? `<span class="tag drop">−${short(drop(l))}</span>` : l.days <= 2 && !gone ? '<span class="tag">Nouveau</span>' : ''}
       <button class="fav-btn${favs[l.id] ? ' on' : ''}" data-fav="${l.id}" aria-pressed="${!!favs[l.id]}" aria-label="${favs[l.id] ? 'Retirer des' : 'Ajouter aux'} favoris">${HEART}</button>
     </div>
@@ -1323,11 +1424,11 @@ function cardHTML(l, gone){
       <div><span class="price">${fmt(l.price)} €</span><span class="ppm">${ppmTxt(l)}</span></div>
       <div class="spec">${specTxt(l)}</div>
       <div class="loc">${l.city} (${l.cp})${l.terrain ? ' · terrain ' + fmt(l.terrain) + ' m²' : ''}</div>
-      <div class="meta">${gone ? '<span class="pill">Annonce retirée</span>' : trips}${l.dpe ? `<span class="pill dpepill" style="background:${DPE_COL[l.dpe]};color:${dcol}">DPE ${l.dpe}</span>` : ''}</div>
+      <div class="meta">${vus[l.id] && !gone ? `<span class="pill seenpill">👁 ${vuTxt(l.id)}</span>` : ''}${gone ? '<span class="pill">Annonce retirée</span>' : trips}${l.dpe ? `<span class="pill dpepill" style="background:${DPE_COL[l.dpe]};color:${dcol}">DPE ${l.dpe}</span>` : ''}</div>
     </div></div>`;
 }
 function pinIcon(l, out){
-  return L.divIcon({className:'', iconSize:null, html:`<div class="price-pin${favs[l.id] ? ' fav' : ''}${out ? ' out' : ''}" data-pin="${l.id}">${short(l.price)}</div>`});
+  return L.divIcon({className:'', iconSize:null, html:`<div class="price-pin${favs[l.id] ? ' fav' : ''}${out ? ' out' : ''}${vus[l.id] ? ' seen' : ''}" data-pin="${l.id}">${short(l.price)}</div>`});
 }
 function renderListings(){
   const ok = LISTINGS.filter(passCriteria);
@@ -1355,7 +1456,7 @@ function renderListings(){
   }
   renderList();
 }
-let lastInside = [], lastLoad0 = false;
+let lastInside = [], lastLoad0 = !!(savedView && savedView.c);
 function renderList(){
   const inside = lastInside, vb = map.getBounds();
   const vis = inside.filter(l => vb.contains([l.lat, l.lng]));
@@ -1364,8 +1465,7 @@ function renderList(){
   $('#nbTab').textContent = n;
   $('#resTitle').textContent = `${n} maison${n > 1 ? 's' : ''} sur la carte`;
   $('#visNote').textContent = total > n ? `${total} au total avec vos critères. Déplacez ou dézoomez la carte pour voir les autres.` : '';
-  $('#sheetLabel').textContent = `${n} maison${n > 1 ? 's' : ''} sur la carte · ${Object.keys(favs).length} favori${Object.keys(favs).length > 1 ? 's' : ''}`;
-  const fc = activeFilterCount(); $('#fcount').hidden = !fc; $('#fcount').textContent = fc;
+  const fc = activeFilterCount() + (zones.length ? 1 : 0); $('#fcount').hidden = !activeFilterCount(); $('#fcount').textContent = activeFilterCount(); $('#fTab').hidden = !fc; $('#fTab').textContent = fc;
 
   // liste
   const list = $('#list');
@@ -1428,7 +1528,6 @@ function favChanged(id){
 function updateFavCounts(){
   const n = Object.keys(favs).length;
   $('#favCountTab').textContent = n; $('#favCountHdr').textContent = n; $('#favCountHdr').classList.toggle('zero', !n);
-  $('#sheetLabel').textContent = $('#sheetLabel').textContent.replace(/· \d+ favoris?$/, `· ${n} favori${n > 1 ? 's' : ''}`);
 }
 $('#favFilter').innerHTML += Object.entries(STATUSES).map(([k, s]) => `<option value="${k}">${s.l}</option>`).join('');
 $('#favFilter').onchange = renderFavs; $('#favSort').onchange = renderFavs;
@@ -1498,15 +1597,27 @@ $('#favImport').onchange = async e => {
 /* Onglets */
 function showTab(t){
   document.querySelectorAll('.tab').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-  $('#pane-search').classList.toggle('on', t === 'search'); $('#pane-favs').classList.toggle('on', t === 'favs');
+  ['search', 'filters', 'favs'].forEach(k => $('#pane-' + k).classList.toggle('on', t === k));
+  $('#pane-' + t).scrollTop = 0; store.set('tab', t);
 }
-document.querySelectorAll('.tab').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+const isMobile = () => matchMedia('(max-width:860px)').matches;
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { showTab(b.dataset.tab); if(isMobile() && sheet === 'peek') setSheet('half'); });
+$('#seeResults').onclick = () => { showTab('search'); if(isMobile()) setSheet('half'); };
 $('#hdrFavs').onclick = () => { showTab('favs'); if(matchMedia('(max-width:860px)').matches) setSheet('full'); };
 
 /* Panneau mobile (feuille glissante) */
 let sheet = 'peek';
 function setSheet(s){ sheet = s; document.body.classList.remove('sheet-half', 'sheet-full'); if(s !== 'peek') document.body.classList.add('sheet-' + s); }
 $('#sheetHandle').onclick = () => setSheet(sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek');
+{ // glisser la poignée ou les onglets vers le haut / le bas
+  let y0 = null;
+  const start = e => { y0 = e.touches[0].clientY; };
+  const end = e => { if(y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
+    if(Math.abs(dy) < 30) return;
+    const order = ['peek', 'half', 'full'], i = order.indexOf(sheet);
+    setSheet(order[Math.max(0, Math.min(2, i + (dy < 0 ? 1 : -1) * (Math.abs(dy) > 220 ? 2 : 1)))]); };
+  [$('#sheetHandle'), $('.tabs')].forEach(el => { el.addEventListener('touchstart', start, {passive:true}); el.addEventListener('touchend', end); });
+}
 
 /* =========================================================
    Fiche annonce
@@ -1517,7 +1628,7 @@ function openListing(l, list){
   if(!l) return;
   if(list) navList = list;
   if(!modalBg.classList.contains('open')) lastFocus = document.activeElement;
-  current = l; slide = 0;
+  current = l; slide = 0; markSeen(l);
   const imgs = Array.from({length:nph(l)}, (_, i) => photo(l, i));
   const liens = liensOf(l);
   const tf = taxeFonciere(l), fn = fraisNotaire(l.price, !!l.neuf);
@@ -1631,7 +1742,8 @@ document.addEventListener('keydown', e => {
    ========================================================= */
 let cities = store.get('cities', []);           // {code, name, cp, lat, lng}
 let activeCommunes = [];                         // communes retenues, avec leur contour
-const geoCache = {}, neighborCache = {};
+const geoCache = store.get('geoCache', {}), neighborCache = store.get('nbCache', {});
+function saveGeo(){ const ks = Object.keys(geoCache); ks.slice(0, Math.max(0, ks.length - 60)).forEach(k => delete geoCache[k]); store.set('geoCache', geoCache); store.set('nbCache', neighborCache); }
 const citiesLayer = L.layerGroup().addTo(map);
 const norm = x => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -1642,7 +1754,7 @@ function inCities(l){ return !cities.length || activeCommunes.some(c => inGeom(l
 async function fetchContour(code){
   if(geoCache[code]) return geoCache[code];
   const j = await (await fetch(`https://geo.api.gouv.fr/communes/${code}?fields=nom,contour&format=json`)).json();
-  return geoCache[code] = j.contour;
+  geoCache[code] = j.contour; return j.contour;
 }
 async function fetchNeighbors(code){
   if(neighborCache[code]) return neighborCache[code];
@@ -1663,6 +1775,7 @@ async function updateCommunes(){
   const geoms = await Promise.all(list.map(c => fetchContour(c.code).catch(() => null)));
   if(seq !== communeSeq) return;
   activeCommunes = list.map((c, i) => ({...c, geom:geoms[i]})).filter(c => c.geom);
+  saveGeo();
   setStatus(activeCommunes.length ? '' : 'Contours des communes indisponibles');
   updateSyncNote();
   drawCommunes(); renderListings();
@@ -1670,11 +1783,12 @@ async function updateCommunes(){
 function drawCommunes(){
   citiesLayer.clearLayers();
   const layers = activeCommunes.map(c => L.geoJSON(c.geom, {interactive:false, style:{color:c.main ? '#18202f' : '#3f4a5c', weight:c.main ? 2.5 : 1.6, opacity:c.main ? 1 : .9, dashArray:c.main ? null : '6 4', fillColor:'#18202f', fillOpacity:c.main ? .04 : .03}}).addTo(citiesLayer));
+  if(fitCities && layers.length && !lastLoad0) lastLoad0 = true;
   if(fitCities && layers.length){ map.flyToBounds(L.featureGroup(layers).getBounds().pad(.05), {duration:.7}); fitCities = false; }
   $('#allStations').disabled = !cities.length;
 }
 function renderCityChips(){
-  $('#cityChips').innerHTML = cities.map(c => `<span class="cchip">${esc(c.name)}<button class="nbt${c.nb ? ' on' : ''}" data-nb="${c.code}" aria-pressed="${!!c.nb}" title="Inclure les communes limitrophes de ${esc(c.name)}">+ limitrophes</button><button data-rm="${c.code}" aria-label="Retirer ${esc(c.name)}">×</button></span>`).join('');
+  $('#cityChips').innerHTML = cities.map(c => `<span class="cchip">${esc(c.name)}<button class="nbt${c.nb ? ' on' : ''}" data-nb="${c.code}" aria-pressed="${!!c.nb}" title="Inclure les communes limitrophes de ${esc(c.name)}"><span class="fl">+ limitrophes</span><span class="ab">+ voisines</span></button><button data-rm="${c.code}" aria-label="Retirer ${esc(c.name)}">×</button></span>`).join('');
   $('#allStations').disabled = !cities.length;
   $('#q').placeholder = cities.length ? 'Ajouter une ville…' : 'Villes recherchées (plusieurs possibles)…';
   requestAnimationFrame(() => { const b = $('#cityBox'); b.scrollLeft = b.scrollWidth; });
@@ -1852,9 +1966,11 @@ function setSyncTxt(h){ $('#syncTxt').innerHTML = h; }
 function renderSync(){
   if(!DATA) return;
   const n = DATA.annonces.length, fin = new Date(DATA.fin), paused = fin < new Date();
-  setSyncTxt(`<b>${fmt(n)} maison${n > 1 ? 's' : ''}</b> · mises à jour ${fmtDate(DATA.maj, true)}<br><small>${paused
+  const m = new Date(DATA.maj), today = m.toDateString() === new Date().toDateString();
+  const quand = (today ? "aujourd'hui" : 'le ' + m.toLocaleDateString('fr-FR', {day:'numeric', month:'short'})) + ' à ' + m.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+  setSyncTxt(`<b>${fmt(n)} maison${n > 1 ? 's' : ''}</b> · à jour ${quand}<br><small>${paused
     ? `Collecte automatique en pause depuis le ${fmtDate(DATA.fin)}`
-    : `Collecte automatique matin et soir jusqu'au ${fmtDate(DATA.fin)}`}</small>`);
+    : `Collecte auto. matin et soir jusqu'au ${fmtDate(DATA.fin)}`}</small>`);
   $('#srcList').innerHTML = Object.entries(DATA.sources || {}).map(([k, v]) => `<li>${v.ok ? '✓' : '⚠️'} ${esc(k)} : ${esc(v.msg)}</li>`).join('')
     + '<li>Leboncoin, SeLoger, PAP et Ouest-France Immo refusent la collecte automatique : utilisez les liens « Chercher aussi sur… ». Bien\'ici reprend déjà une grande partie des annonces d\'agences.</li>';
   updateSyncNote();
@@ -1915,6 +2031,7 @@ function resumePolling(){ if(Date.now() - store.get('pending', 0) < 30 * 60e3) s
    Démarrage
    ========================================================= */
 syncFilterInputs();
+showTab(store.get('tab', 'search'));
 for(const k of Object.keys(favs)) if(/^\d+$/.test(k)) delete favs[k];   // favoris des annonces fictives de la version d'essai
 store.set('favs', favs);
 const saved = store.get('zones', null);
