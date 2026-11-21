@@ -1054,22 +1054,43 @@ let listTimer; map.on('moveend', () => { clearTimeout(listTimer); listTimer = se
 function loadNearby(l){
   const a = (r) => `(around:${r},${l.lat},${l.lng})`;
   const q = `[out:json][timeout:20];(node["highway"="bus_stop"]${a(600)};node["railway"~"^(station|halt|tram_stop)$"]${a(2000)};`
-          + `nwr["amenity"="school"]${a(2000)};nwr["shop"~"^(supermarket|convenience|bakery)$"]${a(2000)};nwr["amenity"="pharmacy"]${a(2000)};`
+          + `nwr["shop"~"^(supermarket|convenience|bakery)$"]${a(2000)};nwr["amenity"="pharmacy"]${a(2000)};`
           + `way["leisure"="park"]${a(1500)};nwr["leisure"~"^(sports_centre|swimming_pool|playground)$"]${a(1500)};);out center 400;`;
   const ORDER = ['Arrêt de bus','Gare','Métro','Tram','École maternelle','École primaire','Collège','Lycée','Boulangerie','Supérette','Supermarché','Pharmacie','Parc','Aire de jeux','Centre sportif','Piscine'];
-  overpass(q).then(j => {
+  const fmtD = d => d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km';
+  const fmtT = d => d <= 2500 ? `${Math.max(1, Math.round(d / 80))} min à pied` : `${Math.round(d * 1.3 / 1000 / 25 * 60)} min en voiture environ`;
+  const row = x => `<li>${x.info.icon === '●' ? `<span style="color:${x.info.color}">●</span>` : x.info.icon} ${x.info.type}${x.name ? ' ' + esc(x.name) : ''} — ${fmtD(x.d)} (${fmtT(x.d)})</li>`;
+  const best = {};
+  let pending = 2;
+  const paint = () => {
     if(current !== l) return;
     const el = document.getElementById('nearStops'); if(!el) return;
-    const best = {};
+    const rows = ORDER.filter(tp => best[tp]).map(tp => best[tp]);
+    el.innerHTML = rows.length ? rows.map(row).join('') + (pending ? '<li style="color:var(--muted)">Recherche en cours…</li>' : '')
+                               : pending ? '<li style="color:var(--muted)">Recherche des écoles, commerces et transports…</li>' : '<li>Aucun équipement trouvé à proximité</li>';
+  };
+  // écoles : l'établissement le plus proche de chaque niveau, toujours (annuaire de l'Éducation nationale)
+  const ED = 'https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-annuaire-education/records?select=nom_etablissement,type_etablissement,libelle_nature,statut_public_prive,position';
+  const edQuery = (type, km, n) => fetch(`${ED}&limit=${n}&where=${encodeURIComponent(`within_distance(position, geom'POINT(${l.lng} ${l.lat})', ${km}km) and type_etablissement="${type}"`)}`).then(r => r.json()).then(j => j.results || []);
+  const niveaux = [['Ecole', 2, 100], ['Collège', 6, 50], ['Lycée', 10, 50]];
+  Promise.all(niveaux.map(async ([type, km, n]) => { let r = await edQuery(type, km, n); if(!r.length) r = await edQuery(type, 25, n); return r; }))
+    .then(lists => {
+      lists.flat().forEach(r => {
+        if(!r.position) return;
+        const t = {amenity:'school', name:r.nom_etablissement, nature:r.libelle_nature || r.type_etablissement, prive:r.statut_public_prive === 'Privé'};
+        let info = poiInfo('ecoles', t); const base = info.type.replace(' (privé)', '');
+        const d = map.distance([l.lat, l.lng], [r.position.lat, r.position.lon]);
+        if(!best[base] || d < best[base].d) best[base] = {d, info, name:t.name};
+      });
+    }).catch(() => {}).finally(() => { pending--; paint(); });
+  overpass(q).then(j => {
     j.elements.forEach(e => {
       const t = e.tags || {}, c = center(e); if(!c) return;
       const k = classify(t), info = poiInfo(k, t), d = map.distance([l.lat, l.lng], c);
+      if(k === 'ecoles') return;
       if(!best[info.type] || d < best[info.type].d) best[info.type] = {d, info, name:t.name};
     });
-    const rows = ORDER.filter(tp => best[tp]).map(tp => best[tp]);
-    el.innerHTML = rows.length ? rows.map(x => `<li>${x.info.icon === '●' ? `<span style="color:${x.info.color}">●</span>` : x.info.icon} ${x.info.type}${x.name ? ' ' + esc(x.name) : ''} — ${x.d < 1000 ? Math.round(x.d) + ' m' : (x.d/1000).toFixed(1).replace('.',',') + ' km'} (${Math.max(1, Math.round(x.d/80))} min à pied)</li>`).join('')
-                           : '<li>Aucun équipement trouvé à proximité</li>';
-  }).catch(() => { const el = document.getElementById('nearStops'); if(el) el.innerHTML = '<li>Indisponible</li>'; });
+  }).catch(() => {}).finally(() => { pending--; paint(); });
 }
 
 /* Estimations financières (indicatives) */
