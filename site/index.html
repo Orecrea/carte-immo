@@ -2158,7 +2158,7 @@ function updateSyncNote(){
   if(recent){ msg = `Collecte demandée à ${new Date(pending).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}. Les annonces arrivent en général en 5 à 15 minutes : la page se met à jour toute seule.`; ok = true; }
   else if(!cities.length) msg = 'Choisissez vos villes en haut de la page, puis cliquez sur Actualiser pour récupérer leurs annonces.';
   else if(!DATA) msg = 'Cliquez sur Actualiser pour lancer la première collecte des annonces de vos villes.';
-  else if(activeCommunes.length && communeCodes() !== [...new Set(DATA.communes || [])].sort().join(',')) msg = 'Vos villes ont changé depuis la dernière collecte : cliquez sur Actualiser pour récupérer leurs annonces.';
+  else if(activeCommunes.length && activeCommunes.some(c => !(DATA.communes || []).includes(c.code))) msg = 'Vos villes ont changé depuis la dernière collecte : cliquez sur Actualiser pour récupérer leurs annonces.';
   else if(new Date(DATA.fin) < new Date()) msg = 'La collecte automatique est en pause. Cliquez sur Actualiser pour la relancer pendant un mois.';
   el.hidden = !msg; el.textContent = msg; el.classList.toggle('ok', ok);
 }

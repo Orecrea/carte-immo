@@ -80,6 +80,46 @@ def communes_detail(codes):
     return out
 
 
+def voisines(code):
+    """Communes limitrophes : points posés à 350 m à l'extérieur du contour, chacun rattaché à sa commune (geo.api.gouv.fr)."""
+    try:
+        g = get_json(f"https://geo.api.gouv.fr/communes/{code}", params={"fields": "contour", "format": "json", "geometry": "contour"}).get("contour")
+    except Exception as e:
+        log(f"Contour de {code} indisponible ({type(e).__name__})"); return []
+    if not g:
+        return []
+    polys = [g["coordinates"]] if g["type"] == "Polygon" else g["coordinates"]
+    km = lambda a, b: math.hypot((b[0] - a[0]) * math.cos(math.radians(a[1])) * 111.2, (b[1] - a[1]) * 111.2)
+    pts = []
+    for poly in polys:
+        r = poly[0]
+        seg = [km(r[i - 1], r[i]) for i in range(1, len(r))]
+        per = sum(seg) or 1
+        n = max(12, min(60, round(per * 2.5))); step = per / n
+        acc, nxt = 0.0, 0.0
+        for i in range(1, len(r)):
+            (x0, y0), (x1, y1), d = r[i - 1], r[i], seg[i - 1]
+            while d > 0 and nxt <= acc + d:
+                t = (nxt - acc) / d; x = x0 + (x1 - x0) * t; y = y0 + (y1 - y0) * t; c = math.cos(math.radians(y))
+                nx, ny = -(y1 - y0), (x1 - x0) * c; ln = math.hypot(nx, ny) or 1; off = .35 / 111
+                px, py = x + nx / ln * off / c, y + ny / ln * off
+                if dans_geom(px, py, g):
+                    px, py = x - nx / ln * off / c, y - ny / ln * off
+                if not dans_geom(px, py, g):
+                    pts.append((py, px))
+                nxt += step
+            acc += d
+    trouvees = {}
+    for la, lo in pts[:200]:
+        try:
+            for c in get_json("https://geo.api.gouv.fr/communes", params={"lat": f"{la:.5f}", "lon": f"{lo:.5f}", "fields": "code,nom", "format": "json"}):
+                if c["code"] != code:
+                    trouvees[c["code"]] = c["nom"]
+        except Exception:
+            pass
+    return [{"code": k, "name": v} for k, v in trouvees.items()]
+
+
 def dans_ring(x, y, ring):
     ins, j = False, len(ring) - 1
     for i in range(len(ring)):
@@ -284,6 +324,14 @@ def main():
             log(f"Demande illisible ({type(e).__name__}) : villes inchangées")
 
     codes = [c["code"] for c in etat.get("communes") or []] or [c["code"] for c in etat.get("villes") or []]
+    # « + voisines » : les communes limitrophes sont toujours ajoutées ici, même si la carte ne les avait pas encore chargées
+    for v in etat.get("villes") or []:
+        if v.get("code") and v["code"] not in codes:
+            codes.append(v["code"])
+        if v.get("nb"):
+            vs = voisines(v["code"])
+            codes += [c["code"] for c in vs if c["code"] not in codes]
+            log(f"{v.get('name', v['code'])} : {len(vs)} commune(s) limitrophe(s)")
     if not codes:
         log("Aucune ville choisie : ajoutez des villes dans la carte puis cliquez sur Actualiser.")
     communes = communes_detail(codes)
