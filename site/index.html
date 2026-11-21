@@ -1570,7 +1570,8 @@ function renderList(){
   // liste
   const list = $('#list');
   if(!n){
-    list.innerHTML = total ? `<div class="empty"><div class="big">🗺️</div><b>Aucune maison dans cette partie de la carte</b>${total} maison${total > 1 ? 's' : ''} correspond${total > 1 ? 'ent' : ''} ailleurs.<br><br><button class="btn" id="showAll">Voir toutes les maisons</button></div>`
+    list.innerHTML = !cities.length ? `<div class="empty"><div class="big">📍</div><b>Choisissez une ville</b>Tapez une ou plusieurs villes en haut de la page pour voir leurs maisons à vendre.</div>`
+      : total ? `<div class="empty"><div class="big">🗺️</div><b>Aucune maison dans cette partie de la carte</b>${total} maison${total > 1 ? 's' : ''} correspond${total > 1 ? 'ent' : ''} ailleurs.<br><br><button class="btn" id="showAll">Voir toutes les maisons</button></div>`
       : `<div class="empty"><div class="big">🏡</div><b>Aucune maison ne correspond</b>Allongez le temps de trajet, ajoutez une ville ou assouplissez les critères.<br><br><button class="btn" id="emptyReset">Réinitialiser les critères</button></div>`;
     if($('#showAll')) $('#showAll').onclick = () => map.flyToBounds(L.latLngBounds(lastInside.map(l => [l.lat, l.lng])).pad(.1), {duration:.7});
     if($('#emptyReset')) $('#emptyReset').onclick = () => $('#resetFilters').click();
@@ -1865,7 +1866,7 @@ const norm = x => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 function inRing(x, y, ring){ let ins = false; for(let i = 0, j = ring.length - 1; i < ring.length; j = i++){ const [xi, yi] = ring[i], [xj, yj] = ring[j]; if(((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ins = !ins; } return ins; }
 function inGeom(lng, lat, g){ const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []; return polys.some(p => inRing(lng, lat, p[0]) && !p.slice(1).some(h => inRing(lng, lat, h))); }
-function inCities(l){ return !cities.length || activeCommunes.some(c => inGeom(l.lng, l.lat, c.geom)); }
+function inCities(l){ return cities.length > 0 && activeCommunes.some(c => inGeom(l.lng, l.lat, c.geom)); }   // sans ville choisie : aucune annonce
 
 async function fetchContour(code){
   if(geoCache[code]) return geoCache[code];
