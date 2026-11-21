@@ -2151,7 +2151,7 @@ function renderSync(){
   const quand = (today ? "aujourd'hui" : 'le ' + m.toLocaleDateString('fr-FR', {day:'numeric', month:'short'})) + ' à ' + m.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
   setSyncTxt(`<b>${fmt(n)} maison${n > 1 ? 's' : ''}</b> · à jour ${quand}<br><small>${paused
     ? `Collecte automatique en pause depuis le ${fmtDate(DATA.fin)}`
-    : `Collecte auto. matin et soir jusqu'au ${fmtDate(DATA.fin)}`}</small>`);
+    : `Collecte auto. à 10 h, 14 h et 20 h jusqu'au ${fmtDate(DATA.fin)}`}</small>`);
   $('#srcList').innerHTML = Object.entries(DATA.sources || {}).map(([k, v]) => `<li>${v.ok ? '✓' : '⚠️'} ${esc(k)} : ${esc(v.msg)}</li>`).join('')
     + '<li>Leboncoin, SeLoger, PAP et Ouest-France Immo refusent la collecte automatique : utilisez les liens « Chercher aussi sur… ». Bien\'ici reprend déjà une grande partie des annonces d\'agences.</li>';
   updateSyncNote();

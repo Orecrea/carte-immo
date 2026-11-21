@@ -2,8 +2,10 @@ name: Collecte des annonces
 
 on:
   schedule:
-    - cron: '20 5 * * *'     # vers 6 h 20 (heure de Paris en hiver)
-    - cron: '20 16 * * *'    # vers 17 h 20
+    # 10 h, 14 h et 20 h heure de Paris : GitHub ne connaît que l'heure UTC,
+    # donc une ligne pour l'heure d'été, une pour l'heure d'hiver ; l'étape « Heure » ne garde que la bonne.
+    - cron: '0 8,12,18 * * *'    # heure d'été (UTC+2)
+    - cron: '0 9,13,19 * * *'    # heure d'hiver (UTC+1)
   workflow_dispatch:          # bouton « Run workflow » sur GitHub
   issues:
     types: [opened]           # bouton « Actualiser » de la carte
@@ -30,6 +32,21 @@ jobs:
     environment:
       name: github-pages
     steps:
+      - name: Heure
+        id: heure
+        env:
+          PROG: ${{ github.event.schedule }}
+        run: |
+          ok=1
+          if [ -n "$PROG" ]; then
+            ete=$([ "$(TZ=Europe/Paris date +%z)" = "+0200" ] && echo 1 || echo 0)
+            case "$PROG" in
+              '0 8,12,18 * * *') [ "$ete" = 1 ] || ok=0 ;;
+              '0 9,13,19 * * *') [ "$ete" = 0 ] || ok=0 ;;
+            esac
+          fi
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          [ "$ok" = 1 ] || echo "Pas l'heure de Paris prévue (changement d'heure) : collecte sautée."
       - uses: actions/checkout@v4
         with: {ref: main}
       - uses: actions/setup-python@v5
@@ -38,7 +55,7 @@ jobs:
 
       - name: Collecte
         id: collecte
-        if: github.event_name != 'push' || contains(toJSON(github.event.commits), 'perso/demande.enc')
+        if: steps.heure.outputs.ok == '1' && (github.event_name != 'push' || contains(toJSON(github.event.commits), 'perso/demande.enc'))
         env:
           CLE_CARTE: ${{ secrets.CLE_CARTE }}
           DEMANDE: ${{ github.event.issue.body }}
