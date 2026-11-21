@@ -9,7 +9,7 @@ on:
     types: [opened]           # bouton « Actualiser » de la carte
   push:
     branches: [main]
-    paths: ['site/index.html']
+    paths: ['site/index.html', 'perso/demande.enc']   # demande.enc : bouton « Actualiser » de la carte reliée à GitHub
 
 permissions:
   contents: write
@@ -38,10 +38,11 @@ jobs:
 
       - name: Collecte
         id: collecte
-        if: github.event_name != 'push'
+        if: github.event_name != 'push' || contains(toJSON(github.event.commits), 'perso/demande.enc')
         env:
           CLE_CARTE: ${{ secrets.CLE_CARTE }}
           DEMANDE: ${{ github.event.issue.body }}
+          DEMANDE_FICHIER: ${{ github.event_name == 'push' && 'perso/demande.enc' || '' }}
         run: python collecte/collecte.py ${{ github.event_name == 'schedule' && 'auto' || 'manuel' }}
 
       - name: Enregistrement

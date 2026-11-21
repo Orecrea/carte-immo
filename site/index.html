@@ -1918,6 +1918,7 @@ async function updateCommunes(){
   main.forEach((c, i) => c.geom = geoms[i]);
   show(main);
   if(seq !== communeSeq) return;
+  if(!cities.some(c => c.nb)) maybeAutoRefresh();
   setStatus(main.every(c => c.geom) ? '' : 'Contours de certaines communes indisponibles');
   // 2) puis les communes limitrophes, ville par ville, dès qu'elles arrivent
   const nb = cities.filter(c => c.nb); if(!nb.length) return;
@@ -1934,7 +1935,7 @@ async function updateCommunes(){
     show(list);
   }));
   if(seq !== communeSeq) return;
-  setStatus('');
+  setStatus(''); maybeAutoRefresh();
   if(fails.length) toast(`Communes limitrophes indisponibles pour ${fails.join(', ')} : réessayez dans un instant`);
 }
 function drawCommunes(){
@@ -2158,15 +2159,47 @@ function updateSyncNote(){
   if(recent){ msg = `Collecte demandée à ${new Date(pending).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}. Les annonces arrivent en général en 5 à 15 minutes : la page se met à jour toute seule.`; ok = true; }
   else if(!cities.length) msg = 'Choisissez vos villes en haut de la page, puis cliquez sur Actualiser pour récupérer leurs annonces.';
   else if(!DATA) msg = 'Cliquez sur Actualiser pour lancer la première collecte des annonces de vos villes.';
-  else if(activeCommunes.length && activeCommunes.some(c => !(DATA.communes || []).includes(c.code))) msg = 'Vos villes ont changé depuis la dernière collecte : cliquez sur Actualiser pour récupérer leurs annonces.';
+  else if(activeCommunes.length && activeCommunes.some(c => !(DATA.communes || []).includes(c.code))){
+    msg = jeton ? 'Vos villes ont changé : la collecte de leurs annonces se lance toute seule dans quelques secondes.' : 'Vos villes ont changé depuis la dernière collecte : cliquez sur Actualiser pour récupérer leurs annonces.';
+    ok = !!jeton;
+  }
   else if(new Date(DATA.fin) < new Date()) msg = 'La collecte automatique est en pause. Cliquez sur Actualiser pour la relancer pendant un mois.';
   el.hidden = !msg; el.textContent = msg; el.classList.toggle('ok', ok);
+  if(msg && !jeton && !recent){ el.insertAdjacentHTML('beforeend', ' <button class="link" id="linkGh">Ne plus passer par GitHub</button>');
+    $('#linkGh').onclick = () => { showTab('favs'); if(isMobile()) setSheet('full'); const st = $('#cloudSteps'); if(st) st.hidden = false; }; }
+}
+const villesKey = list => (list || []).map(c => c.code + (c.nb ? '+' : '')).sort().join(',');
+const requestPayload = () => ({villes:cities.map(c => ({code:c.code, name:c.name, nb:!!c.nb})), communes:activeCommunes.map(c => ({code:c.code, name:c.name}))});
+async function sendRequest(){          // demande de collecte déposée directement dans le dépôt : pas besoin d'ouvrir GitHub
+  if(!jeton || !KEY) return false;
+  try {
+    const g = await gh('perso/demande.enc?ref=main'); if(g.status === 401) return false;
+    const sha = g.ok ? (await g.json()).sha : null;
+    const p = await ghPut('perso/demande.enc', await encryptJSON(requestPayload(), KEY), sha, 'Actualiser les annonces');
+    if(!p.ok) return false;
+    store.set('pending', Date.now()); store.set('autoSent', villesKey(cities)); updateSyncNote(); startPolling();
+    return true;
+  } catch(_) { return false; }
+}
+let autoTimer = null;
+function maybeAutoRefresh(){             // villes ajoutées, retirées ou « + voisines » changé : collecte lancée toute seule
+  clearTimeout(autoTimer);
+  if(!jeton || !DATA || !cities.length) return;
+  const k = villesKey(cities);
+  if(k === villesKey(DATA.villes) || k === store.get('autoSent', '')) return;
+  autoTimer = setTimeout(async () => { if(villesKey(cities) === k && await sendRequest()) toast('Villes modifiées : collecte de leurs annonces lancée automatiquement'); }, 15000);
+  updateSyncNote();
 }
 $('#refreshBtn').onclick = async () => {
   if(!KEY){ showLock(); return; }
   if(!cities.length){ toast('Choisissez d\'abord au moins une ville en haut de la page'); $('#q').focus(); return; }
-  const w = window.open('about:blank', '_blank');          // ouvert tout de suite pour ne pas être bloqué
-  const payload = {villes:cities.map(c => ({code:c.code, name:c.name, nb:!!c.nb})), communes:activeCommunes.map(c => ({code:c.code, name:c.name}))};
+  if(jeton){
+    const b = $('#refreshBtn'); b.disabled = true;
+    const ok = await sendRequest(); b.disabled = false;
+    if(ok){ clearTimeout(autoTimer); toast('Collecte lancée : les annonces arrivent dans 5 à 15 minutes'); return; }
+  }
+  const w = window.open('about:blank', '_blank');          // sans liaison GitHub : on passe par la page GitHub
+  const payload = requestPayload();
   const body = 'Cliquez simplement sur le bouton vert « Create » (ou « Submit new issue ») pour lancer la collecte.\n'
     + 'Le texte ci-dessous contient vos villes, chiffrées : ne le modifiez pas.\n\n' + await encryptJSON(payload, KEY);
   const url = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent('Actualiser les annonces')}&body=${encodeURIComponent(body)}`;
@@ -2351,7 +2384,7 @@ async function activateSync(tok){
     const sha = g.ok ? (await g.json()).sha : null;
     const p = await ghPut(JETON_PATH, await encryptJSON({jeton}, KEY), sha, 'Partage des favoris entre appareils');
     if(!p.ok) throw new Error(p.status === 403 || p.status === 404 ? 'Ce code n\'a pas le droit d\'écrire dans carte-immo. Refaites-le en choisissant bien le dépôt carte-immo et « Contents : Read and write ».' : 'GitHub ne répond pas, réessayez dans un instant.');
-    rawSet('jeton', jeton); syncErr = ''; renderCloud(); await syncNow(); toast('Favoris partagés entre vos appareils');
+    rawSet('jeton', jeton); syncErr = ''; renderCloud(); updateSyncNote(); await syncNow(); toast('Carte reliée : favoris partagés et collecte depuis la carte'); maybeAutoRefresh();
   } catch(e){ jeton = prev; syncErr = e.message; renderCloud(); }
 }
 function renderCloud(){
@@ -2359,11 +2392,11 @@ function renderCloud(){
   if(jeton){
     const t = lastSync ? new Date(lastSync).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) : '';
     el.className = 'cloud ok';
-    el.innerHTML = syncErr ? `<span class="err">${esc(syncErr)}</span>` : `☁️ Favoris, annonces vues et masquées partagés entre vos appareils${t ? ` · à jour à ${t}` : ''}`;
+    el.innerHTML = syncErr ? `<span class="err">${esc(syncErr)}</span>` : `☁️ Carte reliée à GitHub : favoris partagés entre vos appareils${t ? ` (à jour à ${t})` : ''}, collecte lancée depuis la carte.`;
     return;
   }
   el.className = 'cloud';
-  el.innerHTML = `<b>Retrouver vos favoris sur tous vos appareils</b> <button class="link" id="cloudOpen">Activer</button>
+  el.innerHTML = `<b>Relier la carte à GitHub (une seule fois)</b> <button class="link" id="cloudOpen">Activer</button><br>Vos favoris sur tous vos appareils, et la collecte des annonces lancée directement depuis la carte, toute seule quand vous changez de villes.
     <div id="cloudSteps" hidden><ol>
       <li><a href="${TOKEN_URL}" target="_blank" rel="noopener">Ouvrez cette page GitHub</a>. Vérifiez : dépôt <b>carte-immo</b> seulement (« Only select repositories »), droit <b>Contents : Read and write</b>, durée la plus longue possible.</li>
       <li>Cliquez sur « Generate token » en bas, puis copiez le code qui commence par <b>github_pat_</b>.</li>

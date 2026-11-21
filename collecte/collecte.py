@@ -313,6 +313,9 @@ def main():
     etat.setdefault("hist", {}); etat.setdefault("alias", {}); etat.setdefault("cache", {}); etat.setdefault("vu", {})
 
     demande = os.environ.get("DEMANDE", "")
+    fichier = os.environ.get("DEMANDE_FICHIER", "")
+    if not demande and fichier and Path(fichier).exists():
+        demande = Path(fichier).read_text()
     if demande:
         m = re.search(r"\{.*\}", demande, re.S)
         try:
