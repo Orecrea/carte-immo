@@ -1,0 +1,114 @@
+
+  /* ---------- Version MapLibre ---------- */
+  :root{--mapbg:#eef0f3;color-scheme:light}
+  :root[data-theme=dark]{
+    --bg:#0f141b; --panel:#171d26; --text:#e8ecf2; --muted:#9aa5b5; --faint:#6f7a8b; --line:#29323f; --hover:#1f2732;
+    --accent:#f06a43; --accent-dark:#e4572e; --accent-soft:rgba(240,106,67,.18); --solid:#334055; --mapbg:#141a22;
+    --shadow:0 1px 3px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3); --shadow-lg:0 24px 60px rgba(0,0,0,.55);
+    color-scheme:dark;
+  }
+  .map-ctl{position:absolute;top:12px;right:12px;z-index:5;display:flex;flex-direction:column;align-items:flex-end;gap:10px;pointer-events:none}
+  .map-ctl>*{pointer-events:auto}
+  .zone-dot{cursor:grab}
+  .zone-dot.st{width:13px;height:13px;border-width:2px}
+  .maplibregl-ctrl-group{border-radius:12px!important;box-shadow:var(--shadow)!important;overflow:hidden}
+  .maplibregl-ctrl-group button{width:36px;height:36px}
+  .maplibregl-ctrl-bottom-right{margin:0 4px 6px 0}
+  .ci-tip .maplibregl-popup-content{border-radius:10px;padding:8px 11px;font:12.5px/1.45 Inter,system-ui,sans-serif;box-shadow:var(--shadow);background:var(--panel);color:var(--text)}
+  .ci-tip .maplibregl-popup-content b{display:block}
+  .ci-tip.maplibregl-popup-anchor-bottom .maplibregl-popup-tip{border-top-color:var(--panel)}
+  .ci-tip.maplibregl-popup-anchor-top .maplibregl-popup-tip{border-bottom-color:var(--panel)}
+  .ci-tip.maplibregl-popup-anchor-left .maplibregl-popup-tip{border-right-color:var(--panel)}
+  .ci-tip.maplibregl-popup-anchor-right .maplibregl-popup-tip{border-left-color:var(--panel)}
+
+  /* Bouton de thème */
+  .theme-btn{width:38px;padding:0;justify-content:center}
+  .theme-btn .sun{display:none}
+  [data-theme=dark] .theme-btn .sun{display:block}
+  [data-theme=dark] .theme-btn .moon{display:none}
+
+  /* Mes villes : un résumé dans l'en-tête, la liste dans un panneau */
+  .search{max-width:520px}
+  .cities-wrap{position:relative;flex-shrink:0}
+  .cities-btn{height:40px;display:flex;align-items:center;gap:8px;padding:0 14px 0 12px;border:1px solid var(--line);background:var(--panel);border-radius:999px;white-space:nowrap;color:var(--text);transition:border-color .15s,box-shadow .15s}
+  .cities-btn:hover{border-color:var(--faint)}
+  .cities-wrap.open .cities-btn{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+  .cities-btn .cmeta{color:var(--muted);font-weight:500}
+  .cities-btn svg{color:var(--muted);transition:transform .15s}
+  .cities-wrap.open .cities-btn svg{transform:rotate(180deg)}
+  .cdots{display:flex}
+  .cdots i{width:12px;height:12px;border-radius:50%;border:2px solid var(--panel);margin-left:-5px;box-sizing:content-box}
+  .cdots i:first-child{margin-left:0}
+  .cities-panel{position:absolute;top:48px;left:0;width:360px;max-height:min(70vh,560px);overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:6px;display:none;z-index:1200}
+  .cities-wrap.open .cities-panel{display:block;animation:rise .15s ease}
+  .cp-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 10px 6px}
+  .cp-head span{color:var(--muted);font-size:12px}
+  .cp-foot{border-top:1px solid var(--line);margin-top:4px;padding:10px 10px 6px}
+  #cityChips{display:flex;flex-direction:column;gap:2px}
+  .crow{display:flex;align-items:center;gap:6px;padding:4px 4px 4px 6px;border-radius:10px}
+  .crow:hover{background:var(--hover)}
+  .cname{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:none;text-align:left;padding:4px 2px;color:var(--text)}
+  .cname i{width:12px;height:12px;border-radius:4px;background:var(--cc);flex-shrink:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--cc) 22%,transparent)}
+  .cname span{min-width:0}
+  .cname b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cname small{display:block;color:var(--muted);font-size:12px}
+  .crow .nbt{height:28px;border-radius:999px;padding:0 10px;font-size:12px;font-weight:600;border:1px dashed var(--line);background:none;color:var(--muted);white-space:nowrap}
+  .crow .nbt.on{background:var(--cc);border:1px solid var(--cc);color:#fff}
+  .crow .crm{width:28px;height:28px;border:0;background:none;border-radius:50%;color:var(--faint);font-size:17px}
+  .crow .crm:hover{background:var(--line);color:var(--text)}
+
+  /* Thème sombre : détails qui ne passent pas par les variables */
+  [data-theme=dark] .rbtn,[data-theme=dark] .carousel .nav{color:#18202f}
+  [data-theme=dark] .m-note{background:#2a2219;border-color:#4a3a28}
+  [data-theme=dark] .city-box:focus-within{background:var(--panel)}
+  [data-theme=dark] .price-pin{background:var(--panel)}
+  [data-theme=dark] .sync,[data-theme=dark] .cloud,[data-theme=dark] .fcard-foot{background:#141a22}
+  [data-theme=dark] .sync-note{color:#ffc2ab}
+  [data-theme=dark] .sync-note.ok,[data-theme=dark] .cloud.ok,[data-theme=dark] .hist{background:rgba(42,157,143,.16);color:#7fd6c9;border-color:rgba(42,157,143,.3)}
+  [data-theme=dark] .news{background:rgba(70,130,220,.14);border-color:rgba(70,130,220,.3);color:#b9d4f5}
+  [data-theme=dark] .news b{color:#dbe9fb}
+  [data-theme=dark] .news .link{color:#8cbcf5}
+  [data-theme=dark] .news.on{background:#1d4a7a;border-color:#1d4a7a}
+  [data-theme=dark] .pill.seenpill{background:#232b38;color:#9aa5b5}
+  [data-theme=dark] .pill.trip{background:color-mix(in srgb,var(--c) 22%,var(--panel));color:color-mix(in srgb,var(--c) 60%,#fff)}
+  [data-theme=dark] .st-new{background:rgba(99,102,241,.2);color:#a5b4fc}
+  [data-theme=dark] .st-visit{background:rgba(245,158,11,.18);color:#fcd34d}
+  [data-theme=dark] .st-seen{background:rgba(20,184,166,.18);color:#5eead4}
+  [data-theme=dark] .st-out{background:#232b38;color:#9aa5b5}
+  [data-theme=dark] .fav-btn{background:rgba(23,29,38,.85);color:#e8ecf2}
+  [data-theme=dark] .cloud .err{color:#ff8a80}
+  [data-theme=dark] img[src^="data:image/svg"]{filter:invert(.88) hue-rotate(180deg)}
+  [data-theme=dark] .maplibregl-ctrl-group{background:var(--panel)}
+  [data-theme=dark] .maplibregl-ctrl-group button+button{border-top-color:var(--line)}
+  [data-theme=dark] .maplibregl-ctrl button .maplibregl-ctrl-icon{filter:invert(1)}
+  [data-theme=dark] .maplibregl-ctrl-attrib{background:rgba(23,29,38,.8);color:var(--muted)}
+  [data-theme=dark] .maplibregl-ctrl-attrib a{color:var(--muted)}
+  [data-theme=dark] .maplibregl-ctrl-attrib-button{filter:invert(1)}
+  [data-theme=dark] .maplibregl-ctrl-scale{background:rgba(23,29,38,.75);color:var(--text);border-color:var(--muted)}
+
+  @media (max-width:860px){
+    .search{max-width:none}
+    .cities-btn{padding:0 10px;gap:6px}
+    .cities-btn .cmeta{display:none}
+    .cities-panel{position:fixed;top:calc(var(--header) + 6px);left:8px;right:8px;width:auto}
+  }
+
+  /* ---------- Sélecteur Annonces / Transports ---------- */
+  .env{position:relative;display:flex;padding:3px;border-radius:999px;background:var(--bg);border:1px solid var(--line);flex-shrink:0}
+  .env button{position:relative;z-index:1;display:flex;align-items:center;gap:6px;height:32px;padding:0 14px;border:0;background:none;border-radius:999px;font-weight:600;font-size:13.5px;color:var(--muted);transition:color .25s}
+  .env button[aria-selected=true]{color:#fff}
+  .env .ei{font-size:14px}
+  .env-glide{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:999px;background:var(--accent);box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 40%,transparent);transition:transform .3s cubic-bezier(.3,.7,.2,1),background .3s}
+  .env button{flex:1;justify-content:center}
+  body.env-tc .env-glide{transform:translateX(100%);background:linear-gradient(135deg,#1f5fbf,#5b3fb0);box-shadow:0 2px 8px rgba(70,80,200,.4)}
+  .tc-wrap{position:fixed;inset:var(--header) 0 0 0;z-index:1050;opacity:0;visibility:hidden;transition:opacity .2s,visibility 0s .2s;background:var(--bg)}
+  .tc-wrap iframe{width:100%;height:100%;border:0;display:block}
+  body.env-tc .tc-wrap{opacity:1;visibility:visible;transition:opacity .2s}
+  body.env-tc .search,body.env-tc .cities-wrap,body.env-tc #themeBtn,body.env-tc #hdrFavs{visibility:hidden}
+  body.env-tc .logo span{color:#5b3fb0}
+  body.env-tc .logo-mark{background:linear-gradient(135deg,#1f5fbf,#5b3fb0)}
+  @media (max-width:860px){
+    .env button{padding:0 11px}
+    .env .el{display:none}
+    .env .ei{font-size:16px}
+  }

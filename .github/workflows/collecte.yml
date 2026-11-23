@@ -11,7 +11,7 @@ on:
     types: [opened]           # bouton « Actualiser » de la carte
   push:
     branches: [main]
-    paths: ['site/index.html', 'perso/demande.enc']   # demande.enc : bouton « Actualiser » de la carte reliée à GitHub
+    paths: ['site/index.html', 'site/beta.html', 'site/transports.html', 'perso/demande.enc']   # demande.enc : bouton « Actualiser » de la carte reliée à GitHub
 
 permissions:
   contents: write
