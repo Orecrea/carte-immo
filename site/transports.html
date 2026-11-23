@@ -1,0 +1,1812 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carte interactive des transports – Île-de-France</title>
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="preconnect" href="https://data.iledefrance-mobilites.fr" crossorigin>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" onerror="this.href='https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css'">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<!-- secours si unpkg ne répond pas -->
+<script>window.maplibregl || document.write('<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"><\/script>');</script>
+<!-- Premiers et derniers passages par station : bloc rempli par build_horaires.py. Tant qu'il vaut null, la carte fonctionne sans. -->
+<script>/*HORAIRES_DEBUT*/window.HORAIRES = null;/*HORAIRES_FIN*/</script>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --fg: #1b2330; --muted: #5d6877; --line: #dde1e7;
+    --accent: #1f5fbf; --warn: #b4540a; --err: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#10151d; --panel:#1a212c; --fg:#e8ecf2; --muted:#9aa5b5; --line:#2c3643; --accent:#6ea2ff; --warn:#f0a35e; --err:#ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+  #map { position: absolute; inset: 0; }
+  #panel {
+    position: absolute; top: 12px; left: 12px; width: 280px; max-height: calc(100% - 24px); overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  }
+  #panel h1 { font-size: 15px; margin: 0 0 8px; }
+  #panel h2 { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 12px 0 4px; }
+  label.row { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; }
+  label.row input { margin: 0; }
+  .scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .sw { width: 22px; height: 0; border-top: 4px solid; flex: none; }
+  .sw.dash1 { border-top-style: dotted; }
+  .sw.dash2 { border-top-style: dashed; }
+  .sw.dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid; background: var(--panel); }
+  .st { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .st.err { color: var(--err); }
+  #msg { margin-top: 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px; }
+  #msg div.err { color: var(--err); margin-top: 4px; }
+  #toggle { display: none; }
+  .maplibregl-popup-content { color: #1b2330; font: 13px/1.45 system-ui, sans-serif; max-width: 270px; padding: 12px 14px; }
+  .maplibregl-popup-content .t { font-weight: 650; font-size: 14px; }
+  .maplibregl-popup-content .l { color: #3a4452; }
+  .maplibregl-popup-content .d { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e6ec; }
+  .maplibregl-popup-content .d b { font-weight: 600; }
+  .maplibregl-popup-content .m { color: #5d6877; font-size: 12px; }
+  @media (max-width: 520px) {
+    #toggle { display: block; position: absolute; top: 12px; left: 12px; z-index: 3; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; }
+    #panel { top: 56px; width: calc(100% - 24px); max-height: 60%; display: none; }
+    #panel.open { display: block; }
+  }
+
+  #panel { top: 14px; left: 14px; width: 300px; border-radius: 16px; padding: 0; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
+  #panel > * { margin-left: 16px; margin-right: 16px; }
+  #panel h1 { margin: 0; padding: 16px; font-size: 17px; background: linear-gradient(135deg,#1f5fbf,#5b3fb0); color: #fff; border-radius: 16px 16px 0 0; }
+  #panel h1 small { display: block; font-weight: 400; font-size: 12px; opacity: .85; margin-top: 2px; }
+  #panel h2 { margin-top: 16px; }
+  #q { width: calc(100% - 32px); margin-top: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font: inherit; }
+  #q:focus { outline: 2px solid var(--accent); }
+  #res button { display: block; width: 100%; text-align: left; padding: 7px 10px; border: 0; background: none; color: var(--fg); font: inherit; border-radius: 8px; cursor: pointer; }
+  #res button:hover, #res button:focus { background: var(--bg); }
+  #res button span { color: var(--muted); font-size: 11px; }
+  #res .rb { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  #res .rb .b { min-width: 18px; height: 18px; font-size: 10px; padding: 0 4px; border-radius: 5px; }
+  #q { font-size: 15px; border-width: 2px; }
+  details.box { margin: 10px 16px 0; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+  details.box > summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+  details.box .lg { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; }
+  details.box svg { flex: none; }
+  .hz { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 0 16px; }
+  .d .ln[data-hl] { cursor: pointer; border-radius: 6px; }
+  .d .ln[data-hl]:hover { background: rgba(127,127,127,.15); }
+  .go { display: inline-block; margin-top: 8px; font-weight: 600; }
+  /* barre latérale : pleine hauteur à gauche, repliable */
+  @media (min-width: 521px) {
+    #panel { top: 0; left: 0; bottom: 0; height: 100%; max-height: none; width: 300px; border-radius: 0 16px 16px 0; border-left: 0; transition: transform .25s ease; overscroll-behavior: contain; }
+    #panel h1 { border-radius: 0 16px 0 0; }
+    body.ferme #panel { transform: translateX(-100%); box-shadow: none; }
+    #replier { position: absolute; top: 14px; left: 300px; z-index: 3; width: 26px; height: 44px; border: 1px solid var(--line); border-left: 0; border-radius: 0 10px 10px 0;
+      background: var(--panel); color: var(--fg); cursor: pointer; font: 600 14px/1 system-ui, sans-serif; box-shadow: 4px 2px 10px rgba(0,0,0,.15); transition: left .25s ease; }
+    body.ferme #replier { left: 0; }
+    .maplibregl-ctrl-top-left { margin-left: 310px; transition: margin .25s ease; } body.ferme .maplibregl-ctrl-top-left { margin-left: 30px; }
+  }
+  @media (max-width: 520px) { #replier { display: none; } }
+  #panel { overflow-x: hidden; }
+  #panel h2 { margin-left: 16px; }
+  #panel input[type=range] { width: calc(100% - 32px) !important; margin: 0 16px; display: block; }
+  /* barres de défilement fines et discrètes */
+  #panel { scrollbar-width: thin; scrollbar-color: rgba(127,127,127,.45) transparent; }
+  #panel::-webkit-scrollbar { width: 8px; } #panel::-webkit-scrollbar-track { background: transparent; }
+  #panel::-webkit-scrollbar-thumb { background: rgba(127,127,127,.4); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  #panel::-webkit-scrollbar-thumb:hover { background-color: rgba(127,127,127,.65); }
+  /* curseurs : piste fine, gros bouton facile à attraper */
+  #panel input[type=range] { -webkit-appearance: none; appearance: none; height: 26px; background: transparent; cursor: pointer; touch-action: none; }
+  #panel input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 6px; background: linear-gradient(90deg, #1f5fbf, #5b3fb0); opacity: .85; }
+  #panel input[type=range]::-moz-range-track { height: 6px; border-radius: 6px; background: linear-gradient(90deg, #1f5fbf, #5b3fb0); }
+  #panel input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -7px; border-radius: 50%; background: #fff; border: 2px solid #5b3fb0; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  #panel input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid #5b3fb0; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  #panel input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
+  /* légende plus compacte, sur deux colonnes */
+  details.box .lgg { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+  details.box .lg { font-size: 11px; margin: 3px 0; }
+  label.row { padding: 5px 6px; border-radius: 8px; } label.row:hover { background: var(--bg); }
+  #msg { margin-bottom: 14px; }
+  .b { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; color: #fff !important; font: 700 12px/1 system-ui, sans-serif; text-shadow: 0 0 2px rgba(0,0,0,.45); }
+  .b.m { border-radius: 11px; }
+  .ln { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .maplibregl-popup-content { border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+  .maplibregl-popup-content .t { font-size: 15px; }
+  .maplibregl-popup-content table { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .maplibregl-popup-content td { padding: 2px 4px 2px 0; }
+
+  .sw.p { height: 4px; border-top: 0; background: repeating-linear-gradient(90deg, var(--c) 0 var(--a), transparent var(--a) calc(var(--a) + var(--b))); }
+  .tl { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+  .tl span { font-size: 10.5px; padding: 2px 7px; border-radius: 999px; background: #eef1f5; color: #5d6877; }
+  .tl span.done { background: #dcefe3; color: #1f6b3b; }
+  .tl span.cur { background: #1f5fbf; color: #fff; font-weight: 600; }
+  .maplibregl-popup-content a { color: #1f5fbf; }
+  .maplibregl-popup-content { max-height: 70vh; overflow: auto; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<button id="replier" type="button" aria-controls="panel" aria-expanded="true" title="Masquer le panneau">‹</button>
+<button id="toggle" type="button" aria-expanded="false" aria-controls="panel">Calques</button>
+
+<aside id="panel">
+  <h1>Transports d'Île-de-France<small>Métro · Tram · RER · Train · Bus · Projets</small></h1>
+  <input id="q" type="search" placeholder="Rechercher une station…" autocomplete="off" aria-label="Rechercher une station">
+  <div id="res"></div>
+
+  <h2>Fond de carte</h2>
+  <input type="range" id="fond" min="0" max="100" step="5" value="80" aria-label="Fond de carte, du sombre au clair">
+  <div class="scale"><span>Sombre</span><span>Clair</span></div>
+
+  <h2>Réseau ferré</h2>
+  <label class="row"><input type="checkbox" id="c-metro" checked><span class="sw" style="border-color:#1d6fd0"></span>Métro<span class="st" id="s-rail"></span></label>
+  <label class="row"><input type="checkbox" id="c-tram" checked><span class="sw" style="border-color:#2a9d5c"></span>Tram</label>
+  <label class="row"><input type="checkbox" id="c-tzen" checked><span class="sw" style="border-color:#0f9d9a"></span>TZen (bus à haut niveau de service)</label>
+  <label class="row"><input type="checkbox" id="c-cable" checked><span class="sw" style="border-color:#8b5a2b"></span>Câble (téléphérique)</label>
+  <label class="row"><input type="checkbox" id="c-rer" checked><span class="sw" style="border-color:#d6402e"></span>RER</label>
+  <label class="row"><input type="checkbox" id="c-train"><span class="sw" style="border-color:#7a5aa6"></span>Transilien et autres trains</label>
+  <label class="row"><input type="checkbox" id="c-gares" checked><span class="sw dot" style="border-color:#1b2330"></span>Gares et stations<span class="st" id="s-gares"></span></label>
+
+  <h2>Territoire</h2>
+  <label class="row"><input type="checkbox" id="c-communes" checked><span class="sw dash2" style="border-color:#8a5fd1"></span>Limites des communes<span class="st" id="s-communes"></span></label>
+
+  <h2>Bus</h2>
+  <label class="row"><input type="checkbox" id="c-bus"><span class="sw" style="border-color:#e09a1a"></span>Lignes de bus<span class="st" id="s-bus"></span></label>
+  <label class="row"><input type="checkbox" id="c-arrets"><span class="sw dot" style="border-color:#e09a1a"></span>Arrêts de bus<span class="st" id="s-arrets"></span></label>
+
+  <h2>Prolongements et projets</h2>
+  <label class="row"><input type="checkbox" id="c-travaux" checked><span class="sw p" style="--c:#e0457b;--a:2px;--b:2px"></span>En travaux<span class="st" id="s-proj"></span></label>
+  <label class="row"><input type="checkbox" id="c-concertation" checked><span class="sw p" style="--c:#e0457b;--a:6px;--b:3px"></span>Concertation publique</label>
+  <label class="row"><input type="checkbox" id="c-etude" checked><span class="sw p" style="--c:#e0457b;--a:9px;--b:5px"></span>À l'étude</label>
+  <label class="row"><input type="checkbox" id="c-hypothese" checked><span class="sw p" style="--c:#e0457b;--a:2px;--b:6px"></span>Hypothèse (faisabilité)</label>
+  <h2>Horizon des projets</h2>
+  <input type="range" id="horizon" min="0" max="3" step="1" value="3" style="width:calc(100% - 32px);margin:0 16px" aria-label="Horizon des projets affichés">
+  <div class="hz"><span>2027</span><span>2030</span><span>2035</span><span>Tous</span></div>
+  <label class="row"><input type="checkbox" id="c-projstations" checked><span class="sw dot" style="border-color:#e0457b"></span>Futures stations<span class="st" id="s-projstations"></span></label>
+  <label class="row"><input type="checkbox" id="c-projarrets"><span class="sw dot" style="border-color:#e0457b"></span>Gares en projet<span class="st" id="s-projarrets"></span></label>
+
+  <div id="msg">Projets : état au 17 novembre 2026 ; tracés et stations des projets non arrêtés = positions indicatives (cliquez pour le détail et les sources). Cliquez sur une ligne ou une station pour la mettre en évidence. Échap ou un clic dans le vide annule. Les lignes et arrêts de bus s'affichent à partir du zoom 12 (arrêts : 14).</div>
+  <details class="box"><summary>Légende</summary><div class="lgg">
+    <div class="lg"><svg width="26" height="14"><line x1="7" y1="7" x2="19" y2="7" stroke="#1b2330" stroke-width="12" stroke-linecap="round"/><line x1="7" y1="7" x2="19" y2="7" stroke="#fff" stroke-width="8" stroke-linecap="round"/></svg>Grosse correspondance</div>
+    <div class="lg"><svg width="26" height="14"><circle cx="13" cy="7" r="5.5" fill="#fff" stroke="#1b2330" stroke-width="2.5"/></svg>Correspondance</div>
+    <div class="lg"><svg width="26" height="14"><circle cx="13" cy="7" r="3.5" fill="#fff" stroke="#1b2330" stroke-width="1.5"/></svg>Station</div>
+    <div class="lg"><svg width="26" height="14"><line x1="2" y1="4" x2="24" y2="4" stroke="#FFCD00" stroke-width="3"/><line x1="2" y1="10" x2="24" y2="10" stroke="#62259D" stroke-width="3"/></svg>Lignes en parallèle</div>
+    <div class="lg"><svg width="26" height="14"><line x1="2" y1="7" x2="24" y2="7" stroke="#e0457b" stroke-width="3" stroke-dasharray="2 2"/></svg>Projet en travaux</div>
+    <div class="lg"><svg width="26" height="14"><line x1="2" y1="7" x2="24" y2="7" stroke="#e0457b" stroke-width="3" stroke-dasharray="6 3"/></svg>Concertation publique</div>
+    <div class="lg"><svg width="26" height="14"><line x1="2" y1="7" x2="24" y2="7" stroke="#e0457b" stroke-width="3" stroke-dasharray="9 5"/></svg>À l'étude</div>
+    <div class="lg"><svg width="26" height="14"><line x1="2" y1="7" x2="24" y2="7" stroke="#e0457b" stroke-width="3" stroke-dasharray="2 6"/></svg>Hypothèse</div>
+    <div class="lg"><svg width="26" height="14"><circle cx="13" cy="7" r="4.5" fill="#fff" stroke="#e0457b" stroke-width="2.5"/></svg>Future station</div>
+    <div class="lg"><svg width="26" height="14"><line x1="2" y1="7" x2="24" y2="7" stroke="#8a5fd1" stroke-width="1.5" stroke-dasharray="3 2"/></svg>Limite de commune</div>
+  </div></details>
+  <details class="box"><summary>Avancé</summary>
+    <label class="row"><input type="checkbox" id="c-anom"><span class="sw dot" style="border-color:#ff2d95"></span>Signaler les anomalies de tracé<span class="st" id="s-anom"></span></label>
+    <label class="row"><input type="checkbox" id="c-orig"><span class="sw" style="border-color:#888"></span>Tracés bruts (sans retouche)</label>
+    <button type="button" id="reset" style="margin:6px 0;font:inherit;font-size:12px">Réinitialiser les réglages</button>
+  </details>
+</aside>
+
+<script>
+/* ===================== CONFIGURATION ===================== */
+const API = 'https://data.iledefrance-mobilites.fr/api/explore/v2.1/catalog/datasets/';
+const DS = {
+  rail:       'traces-du-reseau-ferre-idf',
+  gares:      'emplacement-des-gares-idf',
+  bus:        'traces-des-lignes-regulieres-de-bus-en-ile-de-france',
+  arrets:     'arrets',
+  projLignes: 'projets_lignes_idf',
+  projArrets: 'projets_arrets_idf'
+};
+const BUS_MIN_ZOOM = 12, ARRETS_MIN_ZOOM = 14;
+
+/* Vos propres tracés de prolongements : collez ici un GeoJSON (par exemple fait sur geojson.io).
+   Chaque feature : geometry LineString, properties { nom, ligne: "T7" | "M14" | "RER B"…, statut: "travaux" | "projet", mise_en_service }.
+   Si "ligne" désigne une ligne existante, le tracé prend automatiquement sa couleur (sinon, ajoutez "couleur": "#rrggbb"). */
+const PROLONGEMENTS_LOCAUX = { type: 'FeatureCollection', features: [] };
+
+/* ===================== OUTILS ===================== */
+const $ = id => document.getElementById(id);
+const msgEl = $('msg');
+function setStatus(id, text, err) { const e = $(id); if (e) { e.textContent = text; e.className = 'st' + (err ? ' err' : ''); } }
+function logErr(text) { const d = document.createElement('div'); d.className = 'err'; d.textContent = text; msgEl.appendChild(d); }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const normTxt = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+const fieldCache = {};
+async function geoField(ds) {
+  if (fieldCache[ds]) return fieldCache[ds];
+  const r = await fetch(API + ds);
+  if (!r.ok) throw new Error('jeu « ' + ds + ' » introuvable (' + r.status + ')');
+  const meta = await r.json();
+  const f = meta.fields || [];
+  const shape = f.find(x => x.type === 'geo_shape');
+  const pt = f.find(x => x.type === 'geo_point_2d');
+  const res = shape ? { name: shape.name, type: 'shape' } : pt ? { name: pt.name, type: 'point' } : null;
+  if (!res) throw new Error('aucun champ géographique dans « ' + ds + ' »');
+  return (fieldCache[ds] = res);
+}
+async function getGeoJSON(ds, where, signal) {
+  let url = API + ds + '/exports/geojson?limit=-1&timezone=UTC';
+  if (where) url += '&where=' + encodeURIComponent(where);
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new Error('« ' + ds + ' » : HTTP ' + r.status);
+  return r.json();
+}
+async function bboxWhere(ds, b) {
+  const g = await geoField(ds);
+  const w = b.getWest(), e = b.getEast(), s = b.getSouth(), n = b.getNorth();
+  if (g.type === 'point') return 'in_bbox(' + g.name + ',' + s + ',' + w + ',' + n + ',' + e + ')';
+  return 'intersects(' + g.name + ",geom'POLYGON((" + [[w,s],[e,s],[e,n],[w,n],[w,s]].map(p => p.join(' ')).join(',') + "))')";
+}
+
+/* Lecture tolérante des propriétés : les noms de champs varient selon les jeux et leurs versions. */
+function pick(p, re) {
+  for (const k of Object.keys(p)) if (re.test(k) && p[k] !== null && p[k] !== '' && typeof p[k] !== 'object') return p[k];
+  return null;
+}
+function hex(v, fallback) {
+  if (!v) return fallback;
+  v = String(v).trim();
+  if (/^[0-9a-f]{6}$/i.test(v)) return '#' + v;
+  if (/^#[0-9a-f]{3,8}$/i.test(v)) return v;
+  return fallback;
+}
+function colorOf(p, fb) {
+  for (const k of Object.keys(p)) if (/colou?r|couleur|hexa/i.test(k) && !/text|texte|print|cmyk/i.test(k)) { const h = hex(p[k], null); if (h) return h; }
+  return fb;
+}
+/* Couleurs officielles des lignes de métro (prioritaires sur le jeu de données). */
+const OFFICIAL = { M1: '#FFCD00', M2: '#003CA6', M3: '#837902', M3BIS: '#6EC4E8', M4: '#CF009E', M5: '#FF7E2E', M6: '#6ECA97', M7: '#FA9ABA', M7BIS: '#6ECA97',
+  M8: '#E19BDF', M9: '#B6BD00', M10: '#C9910D', M11: '#704B1C', M12: '#007852', M13: '#6EC4E8', M14: '#62259D', M15: '#B90845', M16: '#F3A4BA', M17: '#D5C900', M18: '#00A88F', M19: '#6B7F99' };
+const MODE_COLOR = { metro: '#1d6fd0', tram: '#2a9d5c', rer: '#d6402e', train: '#7a5aa6', tzen: '#0f9d9a', cable: '#8b5a2b', other: '#7a5aa6' };
+
+function classifyRail(p) {
+  const mode = String(pick(p, /^(mode|transportmode|route_type|type)/i) || '').toLowerCase();
+  const label = railLabel(p);
+  const lab = label + ' ' + mode + ' ' + String(pick(p, /name|nom/i) || '');
+  if (/t\s?-?\s?zen|bhns/i.test(lab)) return 'tzen';
+  if (/c[âa]ble|t[ée]l[ée]ph[ée]rique/i.test(lab)) return 'cable';
+  if (/metro|subway|métro/.test(mode)) return 'metro';
+  if (/tram/.test(mode)) return 'tram';
+  if (/rail|train|rer|ter/.test(mode)) return (/^rer/i.test(label) || /^rer/i.test(mode) || /^[A-E]$/.test(label)) ? 'rer' : 'train';
+  if (/^rer/i.test(label)) return 'rer';
+  return 'train';
+}
+/* Identifiant normalisé d'une ligne (M14, T7, RERB…) pour relier un projet à la ligne existante. */
+const LINE_COLORS = {};
+/* Familles de lignes, à ne jamais confondre : M = métro (M3BIS), T = tram (T3A ; T11-T13 : Tram Express), TZ = TZen (bus à haut niveau de service),
+   C = câble (téléphérique), RER (RERB), TR = Transilien/TER. Un numéro seul n'est lu comme un métro que s'il est seul ou précédé de « métro » / « ligne ». */
+function lineKey(text) {
+  const raw = String(text || '').toUpperCase().replace(/[’']/g, ' ').replace(/\s+/g, ' ').trim();
+  let m;
+  if ((m = raw.match(/\bRER\s?([A-E])\b/))) return 'RER' + m[1];
+  if ((m = raw.match(/\bT\s?-?\s?ZEN\s?(\d{1,2})\b/))) return 'TZ' + m[1];
+  if ((m = raw.match(/\b(?:C[ÂA]BLE|T[ÉE]L[ÉE]PH[ÉE]RIQUE)\s*C?\s?(\d{1,2})\b/))) return 'C' + m[1];
+  if ((m = raw.match(/\bTRAM(?:WAY|-TRAIN)?(?: EXPRESS)?\s*T?\s?(\d{1,2}\s?[AB]?)\b/)) || (m = raw.match(/(?:^|\s)T\s?(\d{1,2}\s?[AB]?)\b/))) return 'T' + m[1].replace(/\s/g, '');
+  if ((m = raw.match(/\b(?:M[ÉE]TRO|LIGNE|ML)\s*M?\s?(\d{1,2}(?:\s?(?:BIS|B))?)\b(?!\s?[.,]\d)/)) || (m = raw.match(/^M\s?(\d{1,2}(?:\s?BIS)?)$/)) || (m = raw.match(/^(\d{1,2}(?:\s?BIS)?)$/)))
+    return 'M' + m[1].replace(/\s/g, '').replace(/B$/, 'BIS');
+  return null;
+}
+const FAMILLES = [['tzen', /t\s?-?\s?zen|bhns/i], ['cable', /c[âa]ble|t[ée]l[ée]ph[ée]rique/i], ['tram', /tram|(?:^|\s)t\s?\d/i], ['rer', /\brer\b/i], ['metro', /m[ée]tro|(?:^|\s)m\s?\d/i]];
+function lineKeyFromProps(p) {
+  const mode = String(pick(p, /^(mode|transportmode)/i) || '');
+  const srcs = [p.ligne, pick(p, /^(res_com|indice|ligne|short_?name)/i), pick(p, /(nom|name|libell|projet)/i)];
+  for (const src of srcs) {
+    if (!src) continue;
+    const t = String(src);
+    let kind = '', at = 1e9;
+    FAMILLES.forEach(([k, re]) => { const m = re.exec(t); if (m && m.index < at) { at = m.index; kind = k; } });   // la famille citée en premier l'emporte
+    if (!kind) kind = /t\s?-?\s?zen|bhns/i.test(mode) ? 'tzen' : /tram/i.test(mode) ? 'tram' : /rer/i.test(mode) ? 'rer' : /m[ée]tro|subway/i.test(mode) ? 'metro' : '';
+    if (!kind && /^\s*(ligne\s*)?\d{1,2}(\s?bis)?\s*$/i.test(t)) kind = 'metro';
+    if (!kind && /^\s*[A-E]\s*$/i.test(t)) kind = 'rer';
+    if (!kind && /\bligne\s+(?:m\s?)?(1[0-9]|[1-9])\b(?![.,]\d)/i.test(t) && !/bus|tram|rer/i.test(t)) kind = 'metro';
+    const k = kind && kindKey(kind, t);
+    if (k) return k;
+  }
+  return null;
+}
+function titleFromKey(k) {
+  let m = /^RER([A-E])$/.exec(k); if (m) return 'RER ' + m[1];
+  m = /^TZ(\d+)$/.exec(k); if (m) return 'TZen ' + m[1] + ' (bus à haut niveau de service)';
+  m = /^C(\d+)$/.exec(k); if (m) return 'Câble C' + m[1] + ' (téléphérique)';
+  m = /^TR(.+)$/.exec(k); if (m) return 'Transilien ' + m[1];
+  m = /^T(1[1-3])$/.exec(k); if (m) return 'Tram Express T' + m[1];
+  m = /^T(.+)$/.exec(k); if (m) return 'Tram T' + m[1];
+  m = /^M(.+)$/.exec(k); if (m) return 'Métro ' + m[1].replace(/BIS$/, ' bis');
+  return k;
+}
+/* Statuts vérifiés dans les pages officielles IDFM (nov. 2026), prioritaires sur le jeu de données, dont la mise à jour est ancienne. */
+const STATUT_VERIFIE = {
+  T7: { travaux: true, date: 'essais vers 2032 (Athis-Mons – Juvisy)' },
+  T1: { travaux: true, date: 'phase 2 (Montreuil – Val de Fontenay) : travaux 2023-2027' },
+  M15: { travaux: true, date: '15 Sud : 2027 · 15 Est et 15 Ouest : 2031' },
+  M16: { travaux: true, date: '2028 (Saint-Denis Pleyel – Parc du Blanc-Mesnil), puis 2029 (jusqu\'à Noisy – Champs)' },
+  M17: { travaux: true, date: '2028 (jusqu\'au Bourget Aéroport), 2029 (Parc des Expositions), 2030 (Le Mesnil-Amelot)' },
+  M18: { travaux: true, date: 'fin 2026 annoncé (Massy-Palaiseau – Christ de Saclay, non confirmé), 2027 (Orly – Massy-Palaiseau), 2030 (Christ de Saclay – Versailles Chantiers)' }
+};
+
+function decorateRail(fc) {
+  fc.features.forEach(f => {
+    const p = f.properties || (f.properties = {});
+    p._kind = classifyRail(p);
+    p._c = colorOf(p, MODE_COLOR[p._kind]);
+    p._label = railLabel(p);
+    const k = kindKey(p._kind, p._label);
+    p._key = k || '';
+    p._sel = k || 'L:' + p._label;
+    if (OFFICIAL[k]) p._c = OFFICIAL[k];
+    if (k && !LINE_COLORS[k]) LINE_COLORS[k] = p._c;
+  });
+  return fc;
+}
+function decorateProject(fc, source) {
+  fc.features.forEach(f => {
+    const p = f.properties || (f.properties = {});
+    const st = String(pick(p, /(statut|etat|état|phase|avancement|status)/i) || '').toLowerCase();
+    p._build = /travaux|chantier|construction|réalisation|realisation|en cours/.test(st) || String(p.statut || '').toLowerCase() === 'travaux';
+    const key = lineKeyFromProps(p);
+    const verified = key && STATUT_VERIFIE[key];
+    if (verified) { p._build = verified.travaux; p.mise_en_service = verified.date; }
+    p._an = yearOf(p.mise_en_service || pick(p, /(mise_?en_?serv|livraison|date_?(ms|prev)|horizon)/i));
+    p._st = p._build ? 'travaux' : 'etude';
+    // Prolongement d'une ligne existante : même couleur que la ligne. Sinon couleur du projet.
+    p._new = !(key && LINE_COLORS[key]);
+    p._done = /^(en service|mis en service|exploit|r[ée]alis|termin|achev)/.test(st);
+    const kk = !key ? '' : famOf(key);
+    p._c = (key && (LINE_COLORS[key] || OFFICIAL[key])) || colorOf(p, MODE_COLOR[kk] || '#e0457b');
+    p._label = String(pick(p, /^(nom|name|libell|projet)/i) || pick(p, /(nom|name|libell|ligne|projet)/i) || 'Projet');
+    p._key = key || '';
+    p._sel = key || 'L:' + p._label;
+    p._src = source;
+  });
+  return fc;
+}
+function decorateBus(fc) {
+  fc.features.forEach(f => {
+    const p = f.properties || (f.properties = {});
+    p._label = String(pick(p, /(short_?name|shortname|indice|nom_?ligne|name)/i) || '');
+    const lk = lineKey(p._label); p._tz = lk && /^TZ/.test(lk) ? lk : '';
+    p._c = p._tz ? MODE_COLOR.tzen : colorOf(p, '#e09a1a');
+    p._sel = 'B:' + p._label;
+  });
+  return fc;
+}
+
+/* ===================== FOND DE CARTE : DU SOMBRE AU CLAIR ===================== */
+/* On part du style clair et on recalcule toutes ses couleurs. Curseur à gauche : version sombre. Curseur à droite : version claire d'origine. */
+const cctx = document.createElement('canvas').getContext('2d');
+function parseColor(s) {
+  cctx.fillStyle = '#000000'; cctx.fillStyle = s;
+  const v = cctx.fillStyle;
+  if (v[0] === '#') return [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16), 1];
+  const m = v.match(/[\d.]+/g).map(Number);
+  return [m[0], m[1], m[2], m.length > 3 ? m[3] : 1];
+}
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  let h = 0, s = 0;
+  if (d) {
+    s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h /= 6;
+  }
+  return [h, s, l];
+}
+function hsl2rgb(h, s, l) {
+  if (!s) { const v = Math.round(l * 255); return [v, v, v]; }
+  const q = l < .5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = t => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; };
+  return [f(h + 1 / 3), f(h), f(h - 1 / 3)].map(x => Math.round(x * 255));
+}
+const DARK_L = { text: l => 1 - l * .85, halo: l => .04 + (1 - l) * .4, line: l => .13 + (1 - l) * .45, fill: l => .07 + (1 - l) * .4 };
+function propGroup(prop) {
+  if (prop === 'text-color') return 'text';
+  if (prop === 'text-halo-color') return 'halo';
+  return /^line/.test(prop) ? 'line' : 'fill';
+}
+function blendColor(str, prop, t) {
+  const c = parseColor(str), hsl = rgb2hsl(c[0], c[1], c[2]);
+  const d = hsl2rgb(hsl[0], hsl[1] * .6, DARK_L[propGroup(prop)](hsl[2]));
+  const m = (x, y) => Math.round(x * t + y * (1 - t));
+  return 'rgba(' + m(c[0], d[0]) + ',' + m(c[1], d[1]) + ',' + m(c[2], d[2]) + ',' + c[3] + ')';
+}
+function mapColors(v, fn) {
+  if (typeof v === 'string') return /^(#|rgb|hsl)/i.test(v) ? fn(v) : v;
+  if (Array.isArray(v)) return v.map(x => mapColors(x, fn));
+  if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = mapColors(v[k], fn); return o; }
+  return v;
+}
+function casingColor(t) {
+  const m = (a, b) => Math.round(a * t + b * (1 - t));
+  return 'rgb(' + m(255, 14) + ',' + m(255, 18) + ',' + m(255, 24) + ')';
+}
+const COLOR_PROPS = ['background-color', 'fill-color', 'fill-outline-color', 'fill-extrusion-color', 'line-color', 'text-color', 'text-halo-color'];
+const BASE = [];
+let fondT = 0.8, rafPending = false;
+try { const v = localStorage.getItem('carte-idf-fond2'); if (v !== null && !isNaN(+v)) fondT = Math.min(1, Math.max(0, +v / 100)); } catch (e) {}
+
+const mixc = (a, b, t) => a.map((x, i) => Math.round(x * t + b[i] * (1 - t))).join(',');
+const inkColor = t => 'rgb(' + mixc([27, 35, 48], [232, 236, 242], t) + ')';
+const violetInk = t => 'rgb(' + mixc([75, 47, 138], [201, 182, 245], t) + ')';
+const haloColor = t => 'rgba(' + mixc([255, 255, 255], [14, 18, 24], t) + ',.92)';
+function applyLabels() {
+  ['gares-label', 'gares-label-hub', 'projstations-label', 'communes-label'].forEach(id => {
+    if (!map.getLayer(id)) return;
+    map.setPaintProperty(id, 'text-color', id === 'communes-label' ? violetInk(fondT) : inkColor(fondT));
+    map.setPaintProperty(id, 'text-halo-color', haloColor(fondT));
+  });
+}
+function applyFond() {
+  applyLabels();
+  BASE.forEach(b => { try { map.setPaintProperty(b.id, b.prop, mapColors(b.value, c => blendColor(c, b.prop, fondT))); } catch (e) {} });
+  ['casing-train', 'casing-rer', 'casing-tram', 'casing-metro', 'hl-rail-casing', 'hl-proj-casing', 'hl-bus-casing'].forEach(id => map.getLayer(id) && map.setPaintProperty(id, 'line-color', casingColor(fondT)));
+}
+
+/* ===================== INTERACTION : LIGNE EN GRAS, POPUP ===================== */
+const NONE = ['==', ['get', '_sel'], '__none__'];
+const RAIL_LAYERS = ['rail-metro', 'rail-tram', 'rail-rer', 'rail-train'];
+function highlight(keys) {
+  const on = !!(keys && keys.length);
+  const f = on ? ['in', ['get', '_sel'], ['literal', keys]] : NONE;
+  ['hl-rail-casing', 'hl-rail', 'hl-proj-casing', 'hl-proj', 'hl-bus-casing', 'hl-bus'].forEach(id => map.getLayer(id) && map.setFilter(id, f));
+  RAIL_LAYERS.forEach(id => map.setPaintProperty(id, 'line-opacity', on ? .2 : 1));
+  ['casing-train', 'casing-rer', 'casing-tram', 'casing-metro'].forEach(id => map.setPaintProperty(id, 'line-opacity', on ? .12 : .75));
+  Object.keys(STATUTS).forEach(st => map.setPaintProperty('proj-' + st, 'line-opacity', on ? .3 : 1));
+  map.setPaintProperty('bus', 'line-opacity', on ? .2 : .8);
+}
+/* Lignes desservant une station : lues dans les champs qui parlent de lignes, si le jeu de données en contient. */
+function stationKeys(p) {
+  if (p._lines) return JSON.parse(p._lines);
+  const out = new Set();
+  Object.keys(p).filter(k => /(ligne|line|res_com|indice|route)/i.test(k)).forEach(k => {
+    String(p[k]).split(/[;,|\/]/).forEach(tok => {
+      tok = tok.trim(); if (!tok) return;
+      const lk = lineKey(tok); if (lk) out.add(lk);
+      out.add('L:' + tok); out.add('B:' + tok);
+    });
+  });
+  return [...out];
+}
+function stationName(p) {
+  return pick(p, /^(nom|name|stop_?name|nom_?zda|nom_?gare|libelle|arrname)/i) || pick(p, /(nom|name|libell)/i) || '';
+}
+/* année de mise en service (première année ≥ 2024 citée), pour le curseur d'horizon ; inconnue = 9999 */
+function yearOf(v) { const m = String(v || '').match(/20[2-9]\d/g); const y = m ? m.map(Number).filter(n => n >= 2024) : []; return y.length ? Math.min(...y) : 9999; }
+function dateLisible(p) {
+  let v = p.mise_en_service || pick(p, /(mise_?en_?serv|livraison|date_?(ms|prev)|horizon)/i);
+  if (!v) return 'date non communiquée';
+  v = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return new Date(v).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return v.charAt(0).toUpperCase() === v.charAt(0) ? v : v;
+}
+const T_LABEL = { '1': 'Métro', '0': 'Tram', '2': 'Train / RER', '3': 'Bus' };
+const fh = s => s.replace(':', 'h');
+function horairesHTML(p) {
+  const H = window.HORAIRES;
+  if (!H) return '<div class="d m">Premiers et derniers passages : pas encore intégrés à cette page (voir build_horaires.py).</div>';
+  const cands = [normTxt(stationName(p))];
+  Object.keys(p).forEach(k => { if (typeof p[k] === 'string') cands.push(p[k]); });
+  const hit = cands.map(c => H[c]).find(Boolean);
+  if (!hit) return '<div class="d m">Premiers et derniers passages : station introuvable dans le fichier d\'horaires.</div>';
+  const rows = Object.keys(hit).sort().map(t => {
+    const e = hit[t], parts = [];
+    if (e.w) parts.push('Semaine : premier ' + fh(e.w[0]) + ' · dernier ' + fh(e.w[1]));
+    if (e.s) parts.push('Samedi : premier ' + fh(e.s[0]) + ' · dernier ' + fh(e.s[1]));
+    return '<div><b>' + esc(T_LABEL[t] || 'Autre') + '</b><br>' + parts.map(esc).join('<br>') + '</div>';
+  });
+  return '<div class="d">' + rows.join('<div style="height:6px"></div>') + '</div>';
+}
+function popupHTML(layerId, p) {
+  if (layerId === 'gares' || layerId === 'gares-hub' || layerId === 'gares-oval') return gareHTML(p);   // _ll : ajouté à la création des stations
+  if (layerId === 'projstations') return projStationHTML(p);
+  if (p._curated) return projetHTML(p);
+  const station = ['gares', 'gares-hub', 'gares-oval', 'arrets', 'projarrets'].includes(layerId);
+  const projet = /^proj-/.test(layerId) || layerId === 'projarrets';
+  let html = '';
+  if (station) {
+    const lines = stationKeys(p).filter(k => /^(RER|T|M)/.test(k) && !/^[LB]:/.test(k)).map(titleFromKey);
+    const name = stationName(p);
+    if (lines.length) html += '<div class="t">' + esc(lines.join(' · ')) + '</div><div class="l">Station : ' + esc(name) + '</div>';
+    else html += '<div class="t">Station : ' + esc(name || 'sans nom') + '</div>';
+  } else if (layerId === 'bus') {
+    html += '<div class="t">' + esc(p._tz ? titleFromKey(p._tz) : 'Bus ' + p._label) + '</div>';
+  } else if (p._kind === 'train') {
+    html += '<div class="t">Transilien ' + esc(p._label) + '</div>';
+  } else {
+    const ttl = p._key ? titleFromKey(p._key) : p._label;
+    html += projet ? '<div class="ln">' + (p._key ? badge(p._key, p._c) : '') + '<span class="t">' + esc((p._new ? 'Nouvelle ligne : ' : 'Prolongement : ') + ttl) + '</span></div>' + (p._label && p._label !== ttl ? '<div class="l">' + esc(p._label) + '</div>' : '') : '<div class="t">' + esc(ttl) + '</div>';
+  }
+  if (projet) html += '<div class="d"><b>Mise en service prévue :</b> ' + esc(dateLisible(p)) + '</div>';
+  if (/^proj-/.test(layerId)) html += '<div class="d"><b>État d\'avancement :</b> ' + esc(STATUTS[p._st || 'etude'].label) + etapesHTML(p._st || 'etude') + '</div>';
+  if (/^proj-/.test(layerId)) html += '<div class="m" style="margin-top:4px">' + esc(p._src === 'IDFM' ? 'Tracé issu des données IDFM' : (p.precision || 'Tracé fourni localement')) + (STATUT_VERIFIE[p._key] ? ' · statut vérifié nov. 2026' : '') + '</div>';
+  if (station && !projet) html += horairesHTML(p);
+  return html;
+}
+
+/* ===================== NOMS DE LIGNES, STATIONS UNIQUES, RECHERCHE, COMMUNES ===================== */
+/* Libellé commercial d'une ligne : champ res_com en priorité (14, T7, A, H…), pas le nom complet du tracé. */
+function railLabel(p) {
+  return String(pick(p, /^res_com$/i) || pick(p, /^(indice|short_?name|shortname|nom_?ligne)/i) || pick(p, /name|nom/i) || '').trim();
+}
+/* Identifiant selon le mode : M14, M3BIS, T3A, RERA, TRH (Transilien H), TZ3 (TZen 3), C1 (câble). */
+function kindKey(kind, label) {
+  const t = String(label || '').toUpperCase().replace(/MÉTRO|METRO|LIGNE|TRAMWAY|TRAM|RER|TRANSILIEN|EXPRESS|BHNS|CÂBLE|CABLE|T\s?-?\s?ZEN/g, ' ').replace(/\s+/g, ' ').trim();
+  let m;
+  if (kind === 'metro') { m = t.match(/\b(\d{1,2})\s*(BIS|B)?\b/); return m ? 'M' + m[1] + (m[2] ? 'BIS' : '') : ''; }
+  if (kind === 'tram') { m = t.match(/\bT?\s?(\d{1,2}\s?[AB]?)\b/); return m ? 'T' + m[1].replace(/\s/g, '') : ''; }
+  if (kind === 'tzen') { m = t.match(/\b(\d{1,2})\b/); return m ? 'TZ' + m[1] : ''; }
+  if (kind === 'cable') { m = t.match(/\b(\d{1,2})\b/); return m ? 'C' + m[1] : ''; }
+  if (kind === 'rer') { m = t.match(/\b([A-E])\b/); return m ? 'RER' + m[1] : ''; }
+  return t ? 'TR' + t.replace(/\s+/g, '') : '';
+}
+const famOf = k => /^M/.test(k) ? 'metro' : /^RER/.test(k) ? 'rer' : /^TZ/.test(k) ? 'tzen' : /^TR/.test(k) ? 'train' : /^C\d/.test(k) ? 'cable' : 'tram';
+function badge(k, col) {
+  const c = col || LINE_COLORS[k] || OFFICIAL[k] || MODE_COLOR[famOf(k)];
+  const txt = k[0] === 'M' ? k.slice(1).replace('BIS', 'b') : /^RER/.test(k) ? k.slice(3) : /^TR/.test(k) ? k.slice(2) : k;
+  return '<span class="b' + (k[0] === 'M' ? ' m' : '') + '" style="background:' + c + ';color:#fff">' + esc(txt) + '</span>';
+}
+const RANK = k => /^M/.test(k) ? 0 : /^RER/.test(k) ? 1 : /^T\d/.test(k) ? 2 : 3;
+/* Recalage : chaque station est ramenée sur ses lignes. Pour une correspondance, on projette tour à tour le point sur chacune de ses lignes jusqu'à atteindre leur croisement. */
+let RAIL = null, GRID = null, ORIG = null;
+const KX = .66, CELL = .01;
+function buildGrid() {
+  GRID = {};
+  RAIL.features.forEach(f => {
+    const k = f.properties._key, g = f.geometry;
+    if (!k || !g) return;
+    const lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+    lines.forEach(l => { for (let i = 0; i < l.length - 1; i++) {
+      const a = l[i], b = l[i + 1], seg = { k, a, b };
+      const x0 = Math.floor(Math.min(a[0], b[0]) / CELL), x1 = Math.floor(Math.max(a[0], b[0]) / CELL);
+      const y0 = Math.floor(Math.min(a[1], b[1]) / CELL), y1 = Math.floor(Math.max(a[1], b[1]) / CELL);
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 200) continue;
+      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) (GRID[x + ',' + y] = GRID[x + ',' + y] || []).push(seg);
+    } });
+  });
+}
+function nearOn(key, p) {
+  let best = null;
+  const cx = Math.floor(p[0] / CELL), cy = Math.floor(p[1] / CELL), px = p[0] * KX, py = p[1];
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) (GRID[(cx + dx) + ',' + (cy + dy)] || []).forEach(sg => {
+    if (sg.k !== key) return;
+    const ax = sg.a[0] * KX, ay = sg.a[1], vx = sg.b[0] * KX - ax, vy = sg.b[1] - ay, L = vx * vx + vy * vy;
+    const t = L ? Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / L)) : 0;
+    const qx = ax + t * vx, qy = ay + t * vy, d = Math.hypot(px - qx, py - qy);
+    if (!best || d < best.d) best = { d, p: [qx / KX, qy] };
+  });
+  return best;
+}
+let OPS = [];
+function snapStation(p0, keys) {
+  if (!GRID || !keys.length) return p0;
+  let p = p0;
+  for (let i = 0; i < 6; i++) {
+    const ps = keys.map(k => nearOn(k, p)).filter(n => n && n.d < .005);
+    if (!ps.length) break;
+    p = [ps.reduce((a, n) => a + n.p[0], 0) / ps.length, ps.reduce((a, n) => a + n.p[1], 0) / ps.length];
+  }
+  return Math.hypot((p[0] - p0[0]) * KX, p[1] - p0[1]) < .006 ? p : p0;
+}
+/* ===================================================================================================
+   RECONSTRUCTION DES LIGNES À PARTIR DES STATIONS
+   Plutôt que de retoucher les tracés bruts, chaque ligne est reconstruite :
+   1. graphe de la ligne (tronçons raccordés, trous comblés, stations insérées comme nœuds) ;
+   2. élagage : tout ce qui dépasse d'une station terminus ou pend dans le vide disparaît ;
+   3. chaînes lissées par spline (passe exactement par chaque station, aucun angle) ;
+   4. lignes qui se suivent de près : ramenées sur le même tracé, puis écartées côte à côte (géométrie recalculée selon le zoom).
+   =================================================================================================== */
+const M_DEG = 111000;
+const dm = (a, b) => Math.hypot((a[0] - b[0]) * KX, a[1] - b[1]) * M_DEG;
+/* Centres de places : le point de station y est ramené, plus esthétique qu'un point sur la voie. */
+const CENTRES_PLACES = { 'nation': [2.39577, 48.84835], 'republique': [2.36365, 48.86745], 'place d italie': [2.3555, 48.8312],
+  'charles de gaulle etoile': [2.29501, 48.87385], 'bastille': [2.36911, 48.85325], 'concorde': [2.32111, 48.86555],
+  'place de clichy': [2.3276, 48.8838], 'denfert rochereau': [2.33215, 48.83385], 'gambetta': [2.3987, 48.8648], 'stalingrad': [2.36853, 48.88418] };
+const toM = p => [p[0] * KX * M_DEG, p[1] * M_DEG], fromM = m => [m[0] / (KX * M_DEG), m[1] / M_DEG];
+const hyp = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+let REPORT = { pruned: 0, chains: 0, snapped: 0, grouped: 0 };
+const rankCmp = (a, b) => RANK(a) - RANK(b) || a.localeCompare(b, 'fr', { numeric: true });
+
+function projSeg(p, a, b) {
+  const vx = b[0] - a[0], vy = b[1] - a[1], L = vx * vx + vy * vy;
+  const t = L ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / L)) : 0, q = [a[0] + t * vx, a[1] + t * vy];
+  return { t, q, d: Math.hypot(p[0] - q[0], p[1] - q[1]) };
+}
+function nearestOnPoly(l, p) {
+  let best = null;
+  for (let i = 0; i < l.length - 1; i++) { const r = projSeg(p, l[i], l[i + 1]); if (!best || r.d < best.d) best = { d: r.d, i, t: r.t, q: r.q }; }
+  return best;
+}
+const polyLen = pts => { let s = 0; for (let i = 1; i < pts.length; i++) s += hyp(pts[i - 1], pts[i]); return s; };
+/* Points régulièrement espacés le long d'une polyligne, avec la tangente locale. */
+function resample(pts, step) {
+  const total = polyLen(pts), n = Math.max(1, Math.round(total / step)), out = [];
+  let seg = 0, acc = 0;
+  for (let k = 0; k <= n; k++) {
+    const s = total * k / n;
+    while (seg < pts.length - 2 && acc + hyp(pts[seg], pts[seg + 1]) < s - 1e-9) { acc += hyp(pts[seg], pts[seg + 1]); seg++; }
+    const a = pts[seg], b = pts[seg + 1], L = hyp(a, b) || 1, u = Math.max(0, Math.min(1, (s - acc) / L));
+    out.push({ p: [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u], t: [(b[0] - a[0]) / L, (b[1] - a[1]) / L] });
+  }
+  return out;
+}
+
+/* Voies doublées : une polyligne qui longe (40 m, même sens ou sens inverse) une polyligne plus longue de la même ligne sur 75 % de sa longueur est écartée. */
+function dedupeParallel(polys) {
+  const order = polys.map(l => { const bb = [1e12, 1e12, -1e12, -1e12]; l.forEach(p => { bb[0] = Math.min(bb[0], p[0]); bb[1] = Math.min(bb[1], p[1]); bb[2] = Math.max(bb[2], p[0]); bb[3] = Math.max(bb[3], p[1]); }); return { l, bb, len: polyLen(l) }; }).sort((a, b) => b.len - a.len), kept = [];
+  order.forEach(o => {
+    const S = resample(o.l, 40); let hit = 0;
+    S.forEach(s => { if (kept.some(k => {
+      if (s.p[0] < k.bb[0] - 40 || s.p[0] > k.bb[2] + 40 || s.p[1] < k.bb[1] - 40 || s.p[1] > k.bb[3] + 40) return false;
+      const r = nearestOnPoly(k.l, s.p); if (!r || r.d > 40) return false;
+      const a = k.l[r.i], b = k.l[r.i + 1], L = hyp(a, b) || 1; return Math.abs(((b[0] - a[0]) * s.t[0] + (b[1] - a[1]) * s.t[1]) / L) > .8;
+    })) hit++; });
+    if (kept.length && S.length >= 2 && hit / S.length >= .75) return;
+    kept.push(o);
+  });
+  return kept.map(o => o.l);
+}
+
+/* ---- 1. Graphe d'une ligne ---- */
+function buildLineGraph(polys, stations) {
+  const nodes = [], cuts = polys.map(() => []), W = 60;
+  const newNode = (p, st, dev) => { const n = { id: nodes.length, p, st: st || null, dev: dev || 0 }; nodes.push(n); return n; };
+  const ends = polys.map(l => [0, 1].map(s => {
+    const p = s ? l[l.length - 1] : l[0];
+    return nodes.find(n => !n.st && hyp(n.p, p) < W) || newNode(p.slice());
+  }));
+  /* trous et raccords en T : une extrémité isolée est rattachée à la polyligne la plus proche (120 m) */
+  const cnt = new Map(); ends.forEach(e => e.forEach(n => cnt.set(n, (cnt.get(n) || 0) + 1)));
+  const bridged = new Set(), bridges = [], freeN = nodes.filter(n => cnt.get(n) === 1), ownPoly = n => ends.findIndex(e => e[0] === n || e[1] === n);
+  freeN.forEach(n => {
+    const pn = ownPoly(n); let best = null;
+    freeN.forEach(o => { if (o === n || ownPoly(o) === pn) return; const d = hyp(n.p, o.p); if (d < 120 && (!best || d < best.d)) best = { d, o }; });
+    if (best) { const kk = Math.min(n.id, best.o.id) + '-' + Math.max(n.id, best.o.id); if (!bridged.has(kk)) { bridged.add(kk); bridges.push({ a: n, b: best.o, pts: [n.p, best.o.p], len: best.d }); } return; }
+    let t = null;   // raccord en T : à moins de 25 m d'une autre polyligne
+    polys.forEach((l, pi) => { if (pi === pn) return; const r = nearestOnPoly(l, n.p); if (r && r.d < 25 && (!t || r.d < t.d)) t = Object.assign({ pi }, r); });
+    if (t) { n.p = t.q.slice(); cuts[t.pi].push({ s: t.i + t.t, n }); }
+  });
+  /* stations : insérées comme nœuds sur toutes les polylignes voisines (doubles voies comprises) */
+  const snodes = [];
+  stations.forEach(st => {
+    const rs = polys.map((l, pi) => Object.assign({ pi }, nearestOnPoly(l, st.p)));
+    const dmin = Math.min(...rs.map(r => r.d));
+    if (!(dmin <= 450)) return;
+    const n = newNode(st.p.slice(), st, dmin); snodes.push(n);
+    rs.forEach(r => { if (r.d <= dmin + 25 && r.d <= 450) cuts[r.pi].push({ s: r.i + r.t, n }); });
+  });
+  let edges = [];
+  polys.forEach((l, pi) => {
+    const seq = [{ s: 0, n: ends[pi][0] }].concat(cuts[pi].slice().sort((a, b) => a.s - b.s), [{ s: l.length - 1, n: ends[pi][1] }]);
+    for (let k = 0; k < seq.length - 1; k++) {
+      const A = seq[k], B = seq[k + 1]; if (A.n === B.n) continue;
+      const pts = [A.n.p];
+      for (let v = Math.floor(A.s) + 1; v < B.s && v < l.length; v++) if (v > A.s) pts.push(l[v]);
+      pts.push(B.n.p);
+      const e = { a: A.n, b: B.n, pts, len: polyLen(pts) };
+      if (e.len >= 1) edges.push(e);
+    }
+  });
+  edges = edges.concat(bridges.filter(e => e.len >= 1));
+  /* voies doublées : une seule arête par couple de nœuds (la plus courte) */
+  const seen = new Map();
+  edges.forEach(e => { const k = Math.min(e.a.id, e.b.id) + '-' + Math.max(e.a.id, e.b.id), o = seen.get(k); if (!o || e.len < o.len) seen.set(k, e); });
+  edges = [...seen.values()];
+  /* élagage : un bout qui pend (moins de 800 m, sans station) est supprimé ; composantes sans station ou à une seule station intactes */
+  const uf = nodes.map((_, i) => i), find = i => uf[i] === i ? i : (uf[i] = find(uf[i]));
+  edges.forEach(e => { uf[find(e.a.id)] = find(e.b.id); });
+  const stIn = {}; snodes.forEach(n => { if (edges.some(e => e.a === n || e.b === n)) stIn[find(n.id)] = (stIn[find(n.id)] || 0) + 1; });
+  let pruned = 0, changed = true;
+  while (changed) {
+    changed = false;
+    const deg = new Map(); edges.forEach(e => { deg.set(e.a, (deg.get(e.a) || 0) + 1); deg.set(e.b, (deg.get(e.b) || 0) + 1); });
+    edges = edges.filter(e => {
+      const leaf = (deg.get(e.a) === 1 && !e.a.st) || (deg.get(e.b) === 1 && !e.b.st);
+      if (leaf && e.len < 800 && (stIn[find(e.a.id)] || 0) >= 2) { pruned += e.len; changed = true; return false; }
+      return true;
+    });
+  }
+  /* chaînes : suites de nœuds de degré 2 ; coupures aux terminus et aux bifurcations */
+  const adj = new Map();
+  edges.forEach(e => [e.a, e.b].forEach(n => { if (!adj.has(n)) adj.set(n, []); adj.get(n).push(e); }));
+  const used = new Set(), chains = [];
+  const walk = (start, e0) => {
+    const pts = [start.p], fixed = [true], st = [!!start.st], rad = [start.st ? Math.max(35, Math.min(350, 4 * start.dev)) : 35];
+    let n = start, e = e0;
+    while (e && !used.has(e)) {
+      used.add(e);
+      const fwd = e.a === n, seq = fwd ? e.pts : e.pts.slice().reverse(), nxt = fwd ? e.b : e.a;
+      for (let i = 1; i < seq.length - 1; i++) { pts.push(seq[i]); fixed.push(false); st.push(false); rad.push(0); }
+      pts.push(nxt.p); fixed.push(!!nxt.st || adj.get(nxt).length !== 2); st.push(!!nxt.st); rad.push(nxt.st ? Math.max(35, Math.min(350, 4 * nxt.dev)) : 35);
+      n = nxt;
+      const more = adj.get(n).filter(x => !used.has(x));
+      e = adj.get(n).length === 2 && more.length === 1 ? more[0] : null;
+    }
+    return { pts, fixed, st, rad };
+  };
+  [...adj.keys()].filter(n => adj.get(n).length !== 2).forEach(n => adj.get(n).forEach(e => { if (!used.has(e)) chains.push(walk(n, e)); }));
+  [...adj.keys()].forEach(n => adj.get(n).forEach(e => { if (!used.has(e)) chains.push(walk(n, e)); }));
+  return { chains, pruned };
+}
+
+/* ---- 2. Lissage : simplification, arrondi des virages, spline passant par chaque point fixe ---- */
+function crPoint(p0, p1, p2, p3, u) {
+  const sq = (a, b) => Math.max(.01, Math.sqrt(hyp(a, b))), t0 = 0, t1 = t0 + sq(p0, p1), t2 = t1 + sq(p1, p2), t3 = t2 + sq(p2, p3), t = t1 + (t2 - t1) * u;
+  const L = (a, b, ta, tb) => [(tb - t) / (tb - ta) * a[0] + (t - ta) / (tb - ta) * b[0], (tb - t) / (tb - ta) * a[1] + (t - ta) / (tb - ta) * b[1]];
+  const A1 = L(p0, p1, t0, t1), A2 = L(p1, p2, t1, t2), A3 = L(p2, p3, t2, t3), B1 = L(A1, A2, t0, t2), B2 = L(A2, A3, t1, t3);
+  return L(B1, B2, t1, t2);
+}
+function smoothChain(P, fixed, isSt, rad, force) {
+  const n = P.length;
+  if (n < 3) return { pts: P.map(p => p.slice()), st: P.map((_, i) => !!(isSt && isSt[i])) };
+  /* 0. un tracé déjà propre (aucun angle marqué, aucune alternance gauche/droite) n'est pas retouché : on garde les points d'origine */
+  if (!force) {
+    let clean = true, prev = 0;
+    for (let i = 1; i < n - 1 && clean; i++) {
+      const u = [P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]], v = [P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]], l = Math.hypot(...u) * Math.hypot(...v);
+      if (!l) continue;
+      const cr = u[0] * v[1] - u[1] * v[0], an = Math.asin(Math.max(-1, Math.min(1, cr / l))) * 180 / Math.PI, dot = u[0] * v[0] + u[1] * v[1];
+      if (dot < 0 || Math.abs(an) > 30) clean = false;
+      else if (an * prev < 0 && Math.abs(an) > 12 && Math.abs(prev) > 12) clean = false;
+      prev = Math.abs(an) > 4 ? an : 0;
+    }
+    if (clean) return { pts: P.map(p => p.slice()), st: P.map((_, i) => !!(isSt && isSt[i])) };
+  }
+  /* a. sommets libres trop proches d'un point fixe : écartés (la spline s'ouvre en douceur autour de la station) */
+  const fx = []; for (let i = 0; i < n; i++) if (fixed[i]) fx.push(i);
+  const idx = [];
+  for (let i = 0; i < n; i++) { if (fixed[i] || !fx.some(j => hyp(P[i], P[j]) < ((rad && rad[j]) || 35))) idx.push(i); }
+  let Q = idx.map(i => P[i]), F = idx.map(i => fixed[i]), S = idx.map(i => !!(isSt && isSt[i]));
+  /* a2. va-et-vient et zigzags : entre deux points fixes, on retire les sommets libres qui font demi-tour (> 100°) ou qui alternent gauche/droite
+     (écart au tracé direct < 110 m), puis ceux qui s'écartent de moins de 14 m de leurs voisins. Les stations ne bougent jamais. */
+  {
+    const tn = (a, b, c) => (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    const ang = (a, b, c) => { const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]], l = Math.hypot(...u) * Math.hypot(...v); return l ? Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / l))) * 180 / Math.PI : 0; };
+    for (let it = 0; it < 60; it++) {
+      let best = -1, bs = 1e18;
+      for (let i = 1; i < Q.length - 1; i++) {
+        if (F[i]) continue;
+        const dv = projSeg(Q[i], Q[i - 1], Q[i + 1]).d, an = ang(Q[i - 1], Q[i], Q[i + 1]);
+        const zz = (i > 1 && !F[i - 1] ? tn(Q[i - 2], Q[i - 1], Q[i]) * tn(Q[i - 1], Q[i], Q[i + 1]) < 0 : false) || (i < Q.length - 2 && !F[i + 1] ? tn(Q[i - 1], Q[i], Q[i + 1]) * tn(Q[i], Q[i + 1], Q[i + 2]) < 0 : false);
+        const lim = an > 100 ? 400 : zz && an > 25 ? 110 : 14;
+        if (dv < lim && dv < bs) { bs = dv; best = i; }
+      }
+      if (best < 0) break;
+      Q.splice(best, 1); F.splice(best, 1); S.splice(best, 1);
+    }
+  }
+  const m = Q.length;
+  /* b. simplification de Douglas-Peucker (10 m) entre points fixes */
+  const keep = new Uint8Array(m); keep[0] = keep[m - 1] = 1; F.forEach((f, i) => { if (f) keep[i] = 1; });
+  const forced = []; keep.forEach((k, i) => { if (k) forced.push(i); });
+  const stack = []; for (let k = 0; k < forced.length - 1; k++) stack.push([forced[k], forced[k + 1]]);
+  while (stack.length) {
+    const [a, b] = stack.pop(); let mx = 0, ix = -1;
+    for (let i = a + 1; i < b; i++) { const d = projSeg(Q[i], Q[a], Q[b]).d; if (d > mx) { mx = d; ix = i; } }
+    if (mx > 10 && ix > 0) { keep[ix] = 1; stack.push([a, ix], [ix, b]); }
+  }
+  const R = [], RF = [], RS = [];
+  Q.forEach((p, i) => { if (keep[i]) { R.push(p); RF.push(F[i]); RS.push(S[i]); } });
+  /* c. virages libres : sommet remplacé par deux points qui coupent l'angle */
+  const C = [];
+  for (let i = 0; i < R.length; i++) {
+    if (i === 0 || i === R.length - 1 || RF[i]) { C.push({ p: R[i], st: RS[i] }); continue; }
+    const a = R[i - 1], b = R[i], c = R[i + 1], l1 = hyp(a, b), l2 = hyp(b, c);
+    if (!l1 || !l2) continue;
+    const u1 = [(b[0] - a[0]) / l1, (b[1] - a[1]) / l1], u2 = [(c[0] - b[0]) / l2, (c[1] - b[1]) / l2];
+    if (u1[0] * u2[0] + u1[1] * u2[1] > .94) { C.push({ p: b, st: false }); continue; }
+    const r = Math.min(110, .38 * l1, .38 * l2);
+    C.push({ p: [b[0] - u1[0] * r, b[1] - u1[1] * r], st: false }, { p: [b[0] + u2[0] * r, b[1] + u2[1] * r], st: false });
+  }
+  /* d. spline de Catmull-Rom centripète : passe exactement par chaque point de contrôle (stations comprises) */
+  const out = [], os = [], k = C.length;
+  for (let i = 0; i < k - 1; i++) {
+    const p1 = C[i].p, p2 = C[i + 1].p, p0 = i ? C[i - 1].p : [2 * p1[0] - p2[0], 2 * p1[1] - p2[1]], p3 = i + 2 < k ? C[i + 2].p : [2 * p2[0] - p1[0], 2 * p2[1] - p1[1]];
+    out.push(p1.slice()); os.push(C[i].st);
+    const ns = Math.max(1, Math.min(24, Math.ceil(hyp(p1, p2) / 14)));
+    for (let j = 1; j < ns; j++) { out.push(crPoint(p0, p1, p2, p3, j / ns)); os.push(false); }
+  }
+  out.push(C[k - 1].p.slice()); os.push(C[k - 1].st);
+  return { pts: out, st: os };
+}
+function smoothLine(coords, keep) {
+  const set = new Set(keep || []), P = coords.map(toM), fixed = coords.map((c, i) => i === 0 || i === coords.length - 1 || set.has(c));
+  return smoothChain(P, fixed, null, null).pts.map(fromM);
+}
+
+/* ---- Diagnostic : angles vifs, bouts libres hors station, lignes superposées (affichés en option sur la carte) ---- */
+function auditRail(links, stByKey) {
+  const out = [], turn = (a, b, c) => { const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]], l = Math.hypot(...u) * Math.hypot(...v); return l ? Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / l))) * 180 / Math.PI : 0; };
+  const IC = 40, ix = new Map();
+  links.forEach(L => L.samp.forEach((p, i) => { const c = Math.floor(p[0] / IC) + ',' + Math.floor(p[1] / IC); if (!ix.has(c)) ix.set(c, []); ix.get(c).push({ L, p, u: L.u[i] || 0 }); }));
+  const around = p => { const r = [], cx = Math.floor(p[0] / IC), cy = Math.floor(p[1] / IC); for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) r.push(...(ix.get((cx + dx) + ',' + (cy + dy)) || [])); return r; };
+  links.forEach(L => {
+    for (let i = 1; i < L.pts.length - 1; i++) if (turn(L.pts[i - 1], L.pts[i], L.pts[i + 1]) > 45) out.push({ t: 'angle vif', k: L.k, p: L.pts[i] });
+    [L.pts[0], L.pts[L.pts.length - 1]].forEach(e => {
+      const same = around(e).some(o => o.L !== L && o.L.k === L.k && hyp(o.p, e) < 8);
+      if (!same && (stByKey[L.k] || []).length && !(stByKey[L.k] || []).some(s => hyp(s.p, e) < 4)) out.push({ t: 'bout libre', k: L.k, p: e });
+    });
+    let run = 0;
+    L.samp.forEach((p, i) => {
+      const hit = around(p).some(o => o.L.k !== L.k && hyp(o.p, p) < 12 && Math.abs(o.u - (L.u[i] || 0)) < .5);
+      run = hit ? run + 1 : 0; if (run === 8) out.push({ t: 'superposition', k: L.k, p });
+    });
+  });
+  return out;
+}
+
+/* ---- 3. Reconstruction de tout le réseau ---- */
+function rebuildRail() {
+  if (!RAIL || !OPS.length) return false;
+  REPORT = { pruned: 0, chains: 0, snapped: 0, grouped: 0 };
+  const byKey = {}, props = {}, other = [];
+  RAIL.features.forEach(f => {
+    const k = f.properties._key, g = f.geometry;
+    if (!k || !g || (g.type !== 'LineString' && g.type !== 'MultiLineString')) { other.push(f); return; }
+    props[k] = props[k] || f.properties;
+    (g.type === 'LineString' ? [g.coordinates] : g.coordinates).forEach(l => { if (l.length > 1) (byKey[k] = byKey[k] || []).push(l.map(toM)); });
+  });
+  /* grosses correspondances (≥ 4 lignes, représentées par un ovale) : le tracé d'une ligne n'est PAS tordu pour passer par le centre du point ;
+     sa station est le point de son tracé le plus proche (≤ 150 m). Une ligne un peu à l'écart ne fait donc plus de détour : l'ovale la rejoint. */
+  /* Le point (et l'ovale) est recentré sur l'endroit où passent réellement les lignes ; les places (point voulu au centre) gardent le comportement d'origine. */
+  const hubN = {}, hubPts = {}, isPlace = o => typeof normTxt === 'function' && !!CENTRES_PLACES[normTxt(String(o.n).replace(/\(.*?\)/g, ''))];
+  OPS.forEach(o => { const c = toM(o.p), key = o.n + '|' + Math.round(c[0] / 8) + ',' + Math.round(c[1] / 8); o.hk = key; hubN[key] = (hubN[key] || 0) + 1; });
+  OPS.forEach(o => {
+    o.pm = toM(o.p);
+    if (hubN[o.hk] >= 4 && byKey[o.k] && !isPlace(o)) { let b = null; byKey[o.k].forEach(l => { const r = nearestOnPoly(l, o.pm); if (!b || r.d < b.d) b = r; }); if (b && b.d < 150) { o.pm = b.q; (hubPts[o.hk] = hubPts[o.hk] || []).push(b.q); } }
+  });
+  const med = a => { const v = a.slice().sort((x, y) => x - y), n = v.length; return n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2; };
+  const hubC = {}; Object.keys(hubPts).forEach(k => { const v = hubPts[k]; hubC[k] = [med(v.map(p => p[0])), med(v.map(p => p[1]))]; });   // médiane : le faisceau principal l'emporte sur les lignes excentrées
+  if (typeof STATIONS !== 'undefined') STATIONS.forEach(f => { const c = toM(f.geometry.coordinates), key = f.properties._name + '|' + Math.round(c[0] / 8) + ',' + Math.round(c[1] / 8); if (hubC[key]) f.geometry.coordinates = fromM(hubC[key]); });
+  const stByKey = {}; OPS.forEach(o => (stByKey[o.k] = stByKey[o.k] || []).push({ p: o.pm, n: o.n }));
+  const keys = Object.keys(byKey).sort(rankCmp), lines = {};
+  keys.forEach(k => {
+    const g = buildLineGraph(dedupeParallel(byKey[k]), stByKey[k] || []);
+    REPORT.pruned += g.pruned;
+    lines[k] = g.chains.map(c => {
+      const sm = smoothChain(c.pts, c.fixed, c.st, c.rad), links = [];
+      let cur = [sm.pts[0]];
+      for (let i = 1; i < sm.pts.length; i++) { cur.push(sm.pts[i]); if (sm.st[i] && i < sm.pts.length - 1) { links.push({ pts: cur, off: 0 }); cur = [sm.pts[i]]; } }
+      links.push({ pts: cur, off: 0 });
+      return { links: links.filter(L => L.pts.length > 1) };
+    });
+    REPORT.chains += lines[k].length;
+  });
+  /* index spatial des segments déjà traités */
+  const IC = 60, idx = new Map();
+  const lpAt = (lp, f) => { if (!lp || !lp.length) return 0; const x = Math.max(0, Math.min(lp.length - 1, f * (lp.length - 1))), i = Math.floor(x), j = Math.min(lp.length - 1, i + 1); return lp[i] + (lp[j] - lp[i]) * (x - i); };
+  const addSegs = (k, pts, lp) => { const tot = polyLen(pts) || 1; let cum = 0; for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], L = hyp(a, b); cum += L; if (!L) continue;
+    const sg = { k, a, b, ux: (b[0] - a[0]) / L, uy: (b[1] - a[1]) / L, lp: lpAt(lp, (cum - L / 2) / tot) };
+    for (let x = Math.floor(Math.min(a[0], b[0]) / IC); x <= Math.floor(Math.max(a[0], b[0]) / IC); x++) for (let y = Math.floor(Math.min(a[1], b[1]) / IC); y <= Math.floor(Math.max(a[1], b[1]) / IC); y++) { const c = x + ',' + y; if (!idx.has(c)) idx.set(c, []); idx.get(c).push(sg); }
+  } };
+  const near = (p, t, r, skip, minCos) => {
+    const best = {}, cx = Math.floor(p[0] / IC), cy = Math.floor(p[1] / IC);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) (idx.get((cx + dx) + ',' + (cy + dy)) || []).forEach(sg => {
+      if (sg.k === skip) return;
+      const dot = t[0] * sg.ux + t[1] * sg.uy; if (Math.abs(dot) < minCos) return;
+      const pr = projSeg(p, sg.a, sg.b); if (pr.d > r) return;
+      const o = best[sg.k]; if (!o || pr.d < o.d) best[sg.k] = { d: pr.d, q: pr.q, dot, lp: sg.lp, ux: sg.ux, uy: sg.uy };
+    });
+    return best;
+  };
+  /* lignes dans l'ordre (métro d'abord) : sur chaque portion où elle suit de près (28 m) une ligne déjà posée, elle est ramenée sur son tracé ;
+     la portion peut être partielle et se raccorde en douceur. On retient aussi la position latérale d'origine (lp) pour ranger ensuite les lignes
+     dans l'ordre où elles arrivent, et non dans un ordre arbitraire (moins de croisements) */
+  keys.forEach(k => {
+    lines[k].forEach(chain => {
+      let sum = 0;
+      chain.links.forEach(L => resample(L.pts, 14).forEach(s => { const b = near(s.p, s.t, 28, k, .75); Object.keys(b).forEach(y => { sum += b[y].dot; }); }));
+      if (sum < 0) chain.links.forEach(L => L.pts.reverse());
+      chain.links.forEach(L => {
+        L.lp = null;
+        const S = resample(L.pts, 14), n = S.length; if (n < 4) return;
+        const per = S.map(s => near(s.p, s.t, 28, k, .75)), ref = per.map(b => Object.keys(b).sort(rankCmp)[0] || null), good = ref.map(() => false);
+        for (let i = 0; i < n;) { let j = i; while (j < n && ref[i] && ref[j] === ref[i]) j++; if (ref[i] && j - i >= 3) for (let t = i; t < j; t++) good[t] = true; i = Math.max(j, i + 1); }
+        if (!good.some(Boolean)) return;
+        let lat = S.map((s, i) => { if (!good[i]) return null; const r = per[i][ref[i]]; return r.ux * (s.p[1] - r.q[1]) - r.uy * (s.p[0] - r.q[0]) + r.lp; });
+        let last = null; lat = lat.map(v => v == null ? last : (last = v)); last = null;
+        for (let i = n - 1; i >= 0; i--) { if (lat[i] == null) lat[i] = last; else last = lat[i]; }
+        L.lp = lat.map(v => v == null ? 0 : v);
+        const disp = S.map((s, i) => good[i] ? [per[i][ref[i]].q[0] - s.p[0], per[i][ref[i]].q[1] - s.p[1]] : null);
+        L.pts = S.map((s, i) => {
+          let d = disp[i], w = Math.min(1, i / 6, (n - 1 - i) / 6);          // les extrémités (stations) ne bougent pas
+          if (!d) { for (let r = 1; r <= 16 && !d; r++) for (const j of [i - r, i + r]) if (j >= 0 && j < n && disp[j]) { const t = 1 - r / 17, w = t * t * (3 - 2 * t); d = [disp[j][0] * w, disp[j][1] * w]; break; } }
+          return d ? [s.p[0] + d[0] * w, s.p[1] + d[1] * w] : s.p;
+        });
+        L.pts = smoothChain(L.pts, L.pts.map((_, i) => i === 0 || i === L.pts.length - 1), null, null, true).pts;
+        REPORT.snapped++;
+      });
+      chain.links.forEach(L => addSegs(k, L.pts, L.lp));
+    });
+  });
+  /* groupes : en chaque point, les lignes qui se confondent. Un groupe dure au moins 8 points (≈ 110 m) sinon il est absorbé par son voisin ;
+     l'ordre latéral suit la position d'origine des lignes. u = rang en unités d'écartement (gauche positif), appliqué à l'affichage selon le zoom. */
+  const links = [], pend = [], PAIR = {};
+  keys.forEach(k => lines[k].forEach(chain => chain.links.forEach(L => {
+    const S = resample(L.pts, 14), n = S.length; if (n < 2) return;
+    /* groupe = composante connexe : A proche de B et B proche de C (≤ 24 m) forment un seul groupe pour A, B et C, même si A et C sont plus éloignées.
+       Ainsi chaque ligne d'un faisceau voit le même groupe, donc le même rang et le même axe. */
+    /* les trains (Transilien/TER, masqués par défaut) ne partagent pas de faisceau avec métro/RER : sinon ils réservent une place invisible et font onduler les lignes visibles */
+    const isTr = y => /^TR/.test(y), nearV = (p, t) => { const b = near(p, t, 48, k, .85); Object.keys(b).forEach(y => { if (isTr(y) !== isTr(k)) delete b[y]; }); return b; };
+    const nr = S.map(s => nearV(s.p, s.t)), sig = nr.map((b, i) => {
+      const nodes = [{ k, p: S[i].p }].concat(Object.keys(b).map(y => ({ k: y, p: b[y].q }))), seen = new Set([k]);
+      for (let grown = true; grown;) { grown = false; nodes.forEach(a => { if (!seen.has(a.k)) return; nodes.forEach(c => { if (!seen.has(c.k) && hyp(a.p, c.p) <= 24) { seen.add(c.k); grown = true; } }); }); }
+      return [...seen].sort(rankCmp).join('|');
+    });
+    const runs = []; sig.forEach(g => { if (runs.length && runs[runs.length - 1].g === g) runs[runs.length - 1].n++; else runs.push({ g, n: 1 }); });
+    for (;;) {
+      let mi = -1; runs.forEach((r, i) => { if (r.n < 14 && (mi < 0 || r.n < runs[mi].n)) mi = i; });
+      if (mi < 0 || runs.length < 2) break;
+      const Lr = runs[mi - 1], Rr = runs[mi + 1], tgt = !Lr ? mi + 1 : !Rr ? mi - 1 : (Lr.n >= Rr.n ? mi - 1 : mi + 1);
+      runs[tgt].n += runs[mi].n; runs.splice(mi, 1);
+      for (let t = runs.length - 1; t > 0; t--) if (runs[t].g === runs[t - 1].g) { runs[t - 1].n += runs[t].n; runs.splice(t, 1); }
+    }
+    const stable = []; runs.forEach(r => { for (let t = 0; t < r.n; t++) stable.push(r.g); });
+    const carry = {}, lpv = stable.map((gs, i) => {
+      const g = gs.split('|'); if (g.length < 2) return null;
+      const o = {}; g.forEach(y => { if (y === k) o[y] = lpAt(L.lp, i / (n - 1)); else { const b = nr[i][y]; if (b) { carry[y] = b.lp; o[y] = b.lp; } else o[y] = carry[y] || 0; } });
+      return o;
+    });
+    /* vote décisif : là où deux lignes se séparent réellement (18 à 48 m), le côté où part chacune fixe leur ordre dans le faisceau commun */
+    S.forEach((sm, i) => { const t = sm.t; if (!t) return; Object.keys(nr[i]).forEach(y => { const b = nr[i][y], dd = hyp(b.q, sm.p); if (dd < 18) return; const lat = t[0] * (b.q[1] - sm.p[1]) - t[1] * (b.q[0] - sm.p[0]), g = [k, y].sort(), key = g[0] + '|' + g[1], e = PAIR[key] || (PAIR[key] = { d: 0, n: 0 }), df = -lat * 400; e.d += g[0] === k ? df : -df; e.n++; }); });
+    lpv.forEach(o => { if (!o) return; const g = Object.keys(o).sort(); for (let a = 0; a < g.length; a++) for (let b = a + 1; b < g.length; b++) { const key = g[a] + '|' + g[b], e = PAIR[key] || (PAIR[key] = { d: 0, n: 0 }); { const df = o[g[a]] - o[g[b]]; e.d += df * Math.abs(df); e.n++; } } });
+    /* ligne médiane du faisceau : les lignes d'un même groupe suivent exactement le même axe (moyenne de leurs positions, lissée), puis sont écartées de part et d'autre de cet axe.
+       Sans cela, de petits écarts résiduels entre lignes dépassent l'écartement affiché et elles se croisent ou se superposent. */
+    const dsp = S.map((s, i) => { const g = stable[i].split('|'); if (g.length < 2) return [0, 0]; let mx = s.p[0], my = s.p[1], c = 1; g.forEach(y => { if (y === k) return; const b = nr[i][y]; if (b) { mx += b.q[0]; my += b.q[1]; c++; } }); return [mx / c - s.p[0], my / c - s.p[1]]; });
+    const W = 5, cen = S.map((s, i) => { let ax = 0, ay = 0, w = 0; for (let j = Math.max(0, i - W); j <= Math.min(n - 1, i + W); j++) { const ww = 1 - Math.abs(j - i) / (W + 1); ax += dsp[j][0] * ww; ay += dsp[j][1] * ww; w += ww; } const r = Math.min(1, i / 6, (n - 1 - i) / 6); return { p: [s.p[0] + ax / w * r, s.p[1] + ay / w * r] }; });   // extrémités (stations) immobiles
+    S.forEach((s, i) => { s.pc = cen[i].p; });
+    pend.push({ k, L, S, n, stable, lpv });
+  })));
+  /* ordre latéral : une paire de lignes garde le MÊME côté sur tout son parcours commun (décidé à la majorité) ; elles ne se croisent donc
+     qu'aux stations, où les écarts se resserrent, et non au milieu de la voie */
+  const sideOf = (a, b) => { if (a === b) return 0; const x = a < b ? a : b, y = a < b ? b : a, e = PAIR[x + '|' + y]; let d = e && e.n ? e.d / e.n : 0; if (Math.abs(d) < 4) return rankCmp(a, b); return (a < b ? d : -d) > 0 ? -1 : 1; };   // -1 : a est à gauche de b
+  pend.forEach(({ k, L, S, n, stable, lpv }) => {
+    const u = stable.map(gs => {
+      const g = gs.split('|'); if (g.length < 2) return 0;
+      const wins = {}; g.forEach(a => { wins[a] = g.filter(b => b !== a && sideOf(a, b) < 0).length; });
+      const ord = g.slice().sort((a, b) => wins[b] - wins[a] || rankCmp(a, b));
+      return (g.length - 1) / 2 - ord.indexOf(k);
+    });
+    if (u.some(v => v)) REPORT.grouped++;
+    const feat = { type: 'Feature', properties: Object.assign({}, props[k]), geometry: { type: 'LineString', coordinates: L.pts.map(fromM) } };
+    links.push({ k, pts: L.pts, samp: S.map(s => s.pc || s.p), u, lps: S.map((_, i) => lpAt(L.lp, n > 1 ? i / (n - 1) : 0)), feat });
+  });
+  REPORT.anomalies = auditRail(links, stByKey);
+  RAIL_LINKS = links; RAIL_OTHER = other; buildOvals();
+  RAIL.features = other.concat(links.map(L => L.feat));
+  OPS = [];
+  if (typeof console !== 'undefined') console.info('Reconstruction des lignes :', REPORT);
+  if (typeof window !== 'undefined') window.RAPPORT_TRACES = REPORT;
+  return true;
+}
+/* ---- Affichage : les lignes qui se suivent sont écartées de quelques pixels, en géométrie (courbes continues, aucun cran) ;
+   l'écart est recalculé selon le zoom, se resserre vers chaque station et s'ouvre en douceur ---- */
+let RAIL_LINKS = [], RAIL_OTHER = [];
+const mpp = z => 78271.517 * Math.cos(48.85 * Math.PI / 180) / Math.pow(2, z);
+const pxSpacing = () => 8;   // écartement voulu à l'écran, en pixels
+function offsetLine(P, u0, spM, H, R, e0, e1, Rv, ufOut) {
+  let u = u0; const n = P.length, s = [0]; for (let i = 1; i < n; i++) s.push(s[i - 1] + hyp(P[i - 1], P[i]));
+  const T = s[n - 1], Re = Math.min(R, .3 * T), Rf = Math.min(Rv || 0, .45 * T), out = [], sm = t => t * t * (3 - 2 * t);
+  /* là où deux lignes se séparent, l'écart est prolongé (sur H) au-delà de la fin du groupe : il ne retombe qu'une fois les tracés déjà écartés, donc sans superposition */
+  { const ud = u.slice(); for (let i = 0; i < n; i++) { if (u[i]) continue; let best = 0, bd = 1e9; for (let j = i - 1; j >= 0 && s[i] - s[j] <= H; j--) if (u[j]) { bd = s[i] - s[j]; best = u[j]; break; } for (let j = i + 1; j < n && s[j] - s[i] <= H; j++) if (u[j]) { if (s[j] - s[i] < bd) best = u[j]; break; } ud[i] = best; } u = ud; }
+  for (let i = 0; i < n; i++) {
+    let a = 0, w = 0;
+    for (let j = i; j >= 0 && s[i] - s[j] <= H; j--) { const ww = 1 - (s[i] - s[j]) / (H + 1e-9); a += u[j] * ww; w += ww; }
+    for (let j = i + 1; j < n && s[j] - s[i] <= H; j++) { const ww = 1 - (s[j] - s[i]) / (H + 1e-9); a += u[j] * ww; w += ww; }
+    let ui = w ? a / w : 0;
+    const d0 = s[i], d1 = T - s[i];
+    /* aux extrémités : resserrement sur la station, sauf si elle est un ovale (la ligne y rejoint alors son emplacement) */
+    const t0 = e0 ? 1 : (Re > 0 ? Math.min(1, d0 / Re) : 1), t1 = e1 ? 1 : (Re > 0 ? Math.min(1, d1 / Re) : 1);
+    ui *= sm(Math.min(t0, t1));
+    let w0 = e0 && e0 !== true && Rf > 0 ? sm(Math.max(0, 1 - d0 / Rf)) : 0, w1 = e1 && e1 !== true && Rf > 0 ? sm(Math.max(0, 1 - d1 / Rf)) : 0;
+    if (w0 + w1 > 1) { const q = w0 + w1; w0 /= q; w1 /= q; }
+    if (ufOut) ufOut.push(ui * (1 - w0 - w1));
+    const p0 = P[Math.max(0, i - 1)], p1 = P[Math.min(n - 1, i + 1)], L = hyp(p0, p1) || 1, k = ui * spM * (1 - w0 - w1);
+    let x = P[i][0] - (p1[1] - p0[1]) / L * k, y = P[i][1] + (p1[0] - p0[0]) / L * k;
+    if (w0) { x += e0[0] * w0; y += e0[1] * w0; }
+    if (w1) { x += e1[0] * w1; y += e1[1] * w1; }
+    out.push([x, y]);
+  }
+  return out;
+}
+/* ---- Ovales des grosses correspondances (4 lignes et plus) : l'ovale est placé en travers des lignes qui arrivent ; chaque ligne y a son emplacement,
+   rangé dans l'ordre où elle arrive, de sorte que les lignes s'étalent côte à côte avant la station sans se croiser ---- */
+let OVALS = [];
+function buildOvals() {
+  OVALS = []; RAIL_LINKS.forEach(L => { L.oend = null; });
+  if (typeof STATIONS === 'undefined' || !STATIONS.length || !RAIL_LINKS.length) return;
+  STATIONS.forEach(f => {
+    const nn = f.properties._n || 0; if (nn < 4) return;
+    const c = toM(f.geometry.coordinates); let sx = 0, sy = 0; const ends = [];
+    RAIL_LINKS.forEach(L => {
+      const P = L.pts;
+      for (let i = 1; i < P.length - 1; i++) {
+        if (Math.abs(P[i][0] - c[0]) > 90 || Math.abs(P[i][1] - c[1]) > 90 || hyp(P[i], c) > 90) continue;
+        const dx = P[i + 1][0] - P[i - 1][0], dy = P[i + 1][1] - P[i - 1][1], l = Math.hypot(dx, dy); if (!l) continue;
+        const co = dx / l, si = dy / l; sx += co * co - si * si; sy += 2 * co * si;
+      }
+      const own = (() => { try { return JSON.parse(f.properties._lines || '[]'); } catch (_) { return []; } })();
+      if (own.length && !own.includes(L.k)) return;
+      [0, P.length - 1].forEach(e => {
+        if (hyp(P[e], c) > 230) return;
+        let acc = 0, q = P[e]; for (let i = 1; i < P.length; i++) { const a = e ? P[P.length - i] : P[i - 1], b = e ? P[P.length - 1 - i] : P[i]; if (!b) break; const l = hyp(a, b); if (acc + l >= 180) { const g = (180 - acc) / l; q = [a[0] + (b[0] - a[0]) * g, a[1] + (b[1] - a[1]) * g]; break; } acc += l; q = b; }   // point à 180 m le long du tracé
+        /* rang d'écartement (u) des 180 derniers mètres : c'est l'ordre déjà décidé pour le faisceau, donc sans croisement */
+        const Sm = L.samp, ie = e === 0 ? 0 : Sm.length - 1, sd = e === 0 ? 1 : -1; let su = 0, sl = 0, cn = 0;
+        for (let q = ie; q >= 0 && q < Sm.length && hyp(Sm[q], c) < 180; q += sd) { su += L.u[q] || 0; sl += (L.lps && L.lps[q]) || 0; cn++; }
+        const t = e === 0 ? [P[1][0] - P[0][0], P[1][1] - P[0][1]] : [P[P.length - 1][0] - P[P.length - 2][0], P[P.length - 1][1] - P[P.length - 2][1]], tl = Math.hypot(t[0], t[1]) || 1;
+        ends.push({ k: L.k, L, e: e === 0 ? 0 : 1, p: q, u: cn ? su / cn : 0, lp: cn ? sl / cn : 0, t: [t[0] / tl, t[1] / tl] });
+      });
+    });
+    const th = (sx || sy ? Math.atan2(sy, sx) / 2 : 0) + Math.PI / 2, d = [Math.cos(th), Math.sin(th)], lat = {};
+    const dir = [d[1], -d[0]], side = { 1: {}, '-1': {} }, avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+    ends.forEach(e => { const sd = ((e.p[0] - c[0]) * dir[0] + (e.p[1] - c[1]) * dir[1]) >= 0 ? 1 : -1; (side[sd][e.k] = side[sd][e.k] || []).push(Math.round(((e.p[0] - c[0]) * d[0] + (e.p[1] - c[1]) * d[1]) / 10) * 10 + e.u * 12 * (-e.t[1] * d[0] + e.t[0] * d[1])); });   // même ordre que le faisceau affiché (u), la position réelle ne servant qu'aux lignes isolées   // position à ~180 m + écart d'origine mémorisé au recollement (lp), le rang du faisceau (u) ne servant qu'à départager
+    /* chaque côté d'arrivée a son propre éventail, rangé dans l'ordre naturel de ses lignes (aucun croisement ni détour à l'extérieur) ;
+       une ligne qui traverse peut changer de rang d'un côté à l'autre : ce raccord se fait SOUS l'ovale, qui le masque */
+    const sl = { 1: {}, '-1': {} };
+    [1, -1].forEach(sd => { const ks = Object.keys(side[sd]).sort((x, y) => avg(side[sd][x]) - avg(side[sd][y]) || rankCmp(x, y)); ks.forEach((k, i) => { sl[sd][k] = i - (ks.length - 1) / 2; }); });
+    const n1 = Object.keys(sl[1]).length, n2 = Object.keys(sl[-1]).length, m = Math.max(n1, n2);
+    if (m < 2) return;
+    const slots = {}; new Set(Object.keys(sl[1]).concat(Object.keys(sl[-1]))).forEach(k => { const v = [sl[1][k], sl[-1][k]].filter(x => x !== undefined); slots[k] = avg(v); });
+    const ov = { c, d, slots, sl, m, props: f.properties }; OVALS.push(ov);
+    ends.forEach(e => { const sd = ((e.p[0] - c[0]) * dir[0] + (e.p[1] - c[1]) * dir[1]) >= 0 ? 1 : -1; (e.L.oend = e.L.oend || [null, null])[e.e] = { o: ov, sd }; });
+  });
+}
+function ovalEnd(L, e, sp) {
+  const oe = L.oend && L.oend[e]; if (!oe) return null;
+  const v = oe.o.sl[oe.sd][L.k]; if (v === undefined) return null;
+  const P = e ? L.samp[L.samp.length - 1] : L.samp[0];   // déplacement = (emplacement sur l'ovale) − (extrémité actuelle de la ligne)
+  return [oe.o.c[0] + oe.o.d[0] * v * sp - P[0], oe.o.c[1] + oe.o.d[1] * v * sp - P[1]];
+}
+function ovalFeatures(z, fc) {
+  const sp = pxSpacing(z) * mpp(z), out = [], seen = new Set();
+  OVALS.forEach((o, i) => {
+    seen.add(o.props._name);
+    const A = OVAL_AX[i] || { c: o.c, d: o.d, lo: -sp / 2, hi: sp / 2 };
+    out.push({ type: 'Feature', properties: o.props, geometry: { type: 'LineString', coordinates: [fromM([A.c[0] + A.d[0] * A.lo, A.c[1] + A.d[1] * A.lo]), fromM([A.c[0] + A.d[0] * A.hi, A.c[1] + A.d[1] * A.hi])] } });
+  });
+  ((fc && fc.features) || []).forEach(f => { if ((f.properties._n || 0) >= 4 && !seen.has(f.properties._name)) { const c = toM(f.geometry.coordinates); out.push({ type: 'Feature', properties: f.properties, geometry: { type: 'LineString', coordinates: [fromM([c[0] - 1, c[1]]), fromM([c[0] + 1, c[1]])] } }); } });
+  return { type: 'FeatureCollection', features: out };
+}
+/* Grosses correspondances : AUCUN éventail. Les lignes gardent leur écart côte à côte jusqu'à la station (pas de resserrement) et l'ovale est posé
+   en travers de leurs extrémités réelles. Pas de crochet, pas de croisement ajouté, pas de détour. */
+let OVAL_PTS = [], OVAL_AX = [];
+function railAtZoom(z) {
+  const m = mpp(z), sp = pxSpacing(z) * m, H = Math.max(60, 25 * m), R = Math.max(30, 16 * m), Rv = Math.max(90, 30 * m);
+  OVAL_PTS = OVALS.map(() => []); OVAL_AX = OVALS.map(() => null);
+  const items = [], ends = OVALS.map(() => []);
+  RAIL_LINKS.forEach(L => {
+    const o0 = L.oend && L.oend[0], o1 = L.oend && L.oend[1];
+    const out = (L.u.some(v => v) || o0 || o1) ? offsetLine(L.samp, L.u, sp, H, R, o0 ? true : null, o1 ? true : null, 0) : null;
+    const it = { L, out }; items.push(it);
+    [0, 1].forEach(e => { const oe = e ? o1 : o0; if (!oe || /^TR/.test(L.k)) return; const P = out || L.samp; ends[OVALS.indexOf(oe.o)].push({ it, e, p: P[e ? P.length - 1 : 0] }); });
+  });
+  /* ovale = droite qui passe au mieux par les extrémités réelles des lignes (axe principal) ; chaque extrémité y est ramenée en douceur */
+  ends.forEach((E, i) => {
+    const o = OVALS[i]; if (!E.length) return;
+    const cx = E.reduce((a, q) => a + q.p[0], 0) / E.length, cy = E.reduce((a, q) => a + q.p[1], 0) / E.length;
+    let sxx = 0, syy = 0, sxy = 0; E.forEach(q => { const dx = q.p[0] - cx, dy = q.p[1] - cy; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; });
+    let d = o.d; if (sxx + syy > sp * sp) { const th = .5 * Math.atan2(2 * sxy, sxx - syy); d = [Math.cos(th), Math.sin(th)]; }
+    const ts = E.map(q => (q.p[0] - cx) * d[0] + (q.p[1] - cy) * d[1]);
+    let lo = Math.min(...ts), hi = Math.max(...ts); if (hi - lo < sp) { const mid = (lo + hi) / 2; lo = mid - sp / 2; hi = mid + sp / 2; }
+    OVAL_AX[i] = { c: [cx, cy], d, lo, hi };
+    E.forEach((q, j) => {
+      const tgt = [cx + d[0] * ts[j], cy + d[1] * ts[j]], dv = [tgt[0] - q.p[0], tgt[1] - q.p[1]]; if (Math.hypot(dv[0], dv[1]) < .05) return;
+      const it = q.it; if (!it.out) it.out = it.L.samp.map(p => p.slice());
+      const P = it.out, n = P.length; let acc = 0;
+      for (let k = 0; k < n; k++) { const idx = q.e ? n - 1 - k : k; if (k) acc += hyp(P[idx], P[q.e ? idx + 1 : idx - 1]); const t = Math.max(0, 1 - acc / Math.min(Rv, .45 * polyLen(P))); if (t <= 0) break; const w = t * t * (3 - 2 * t); P[idx] = [P[idx][0] + dv[0] * w, P[idx][1] + dv[1] * w]; }
+    });
+  });
+  const feats = items.map(({ L, out }) => out ? { type: 'Feature', properties: L.feat.properties, geometry: { type: 'LineString', coordinates: out.map(fromM) } } : L.feat);
+  /* une ligne qui traverse : ses deux tronçons sont raccordés le long de l'ovale */
+  const joins = {}; items.forEach(({ L, out }) => [0, 1].forEach(e => { const oe = L.oend && L.oend[e]; if (!oe) return; const P = out || L.samp, key = OVALS.indexOf(oe.o) + '|' + L.k; (joins[key] = joins[key] || { props: L.feat.properties, p: [] }).p.push(P[e ? P.length - 1 : 0]); }));
+  Object.values(joins).forEach(j => { if (j.p.length === 2 && hyp(j.p[0], j.p[1]) > .01) feats.push({ type: 'Feature', properties: j.props, geometry: { type: 'LineString', coordinates: j.p.map(fromM) } }); });
+  return { type: 'FeatureCollection', features: RAIL_OTHER.concat(feats) };
+}
+function railStatic() { return railAtZoom(STATIC_Z); }   // géométrie unique, continue et lisse (aucun découpage, aucun recalcul au zoom)
+const STATIC_Z = 14;
+/* FIN MODULE TRACÉS */
+
+let STATIONS = [];
+/* Une seule station (un seul cercle) par lieu, même desservi par plusieurs lignes : regroupement par nom et proximité (~500 m). */
+/* Une même correspondance peut porter des noms différents selon le réseau (« Gare d'Austerlitz » / « Paris-Austerlitz ») : deux stations à moins de 60 m, ou à moins de 250 m avec un mot significatif commun, ne forment qu'un seul cercle. */
+const STOPW = new Set(['gare', 'de', 'du', 'des', 'la', 'le', 'les', 'l', 'd', 'saint', 'sainte', 'st', 'ste', 'paris', 'rer', 'metro', 'station', 'sur', 'en', 'aux', 'et', 'ville', 'place', 'pont', 'porte', 'avenue', 'rue']);
+const nameToks = n => normTxt(String(n).replace(/\(.*?\)/g, '')).split(' ').filter(t => t.length >= 4 && !STOPW.has(t));
+function mergeClusters(all) {
+  const uf = all.map((_, i) => i), find = i => uf[i] === i ? i : (uf[i] = find(uf[i])), tk = all.map(c => nameToks(c.name));
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    const a = all[i], b = all[j]; if (Math.abs(a.y - b.y) > .003) continue;
+    const d = Math.hypot((a.x - b.x) * KX, a.y - b.y) * 111000;
+    if (d < 60 || (d < 250 && tk[i].some(t => tk[j].includes(t)))) uf[find(i)] = find(j);
+  }
+  const by = new Map(); all.forEach((c, i) => { const r = find(i); if (!by.has(r)) by.set(r, []); by.get(r).push(c); });
+  return [...by.values()].map(g => {
+    if (g.length === 1) return g[0];
+    const main = g.slice().sort((a, b) => b.keys.size - a.keys.size || a.name.length - b.name.length)[0], n = g.reduce((s, c) => s + c.n, 0);
+    return { name: main.name, x: g.reduce((s, c) => s + c.x * c.n, 0) / n, y: g.reduce((s, c) => s + c.y * c.n, 0) / n, n, keys: new Set(g.flatMap(c => [...c.keys])), kinds: new Set(g.flatMap(c => [...c.kinds])), merged: g.map(c => c.name) };
+  });
+}
+function buildStations(fc) {
+  const groups = {};
+  fc.features.forEach(f => {
+    if (!f.geometry || f.geometry.type !== 'Point') return;
+    const p = f.properties || {}, name = String(stationName(p) || '').trim();
+    if (!name) return;
+    const kind = classifyRail(p), key = kindKey(kind, railLabel(p)), x = f.geometry.coordinates[0], y = f.geometry.coordinates[1];
+    const g = (groups[normTxt(name)] = groups[normTxt(name)] || []);
+    let c = g.find(c => Math.hypot((c.x - x) * .66, c.y - y) < .005);
+    if (!c) g.push(c = { name, x, y, n: 0, keys: new Set(), kinds: new Set() });
+    c.x = (c.x * c.n + x) / (c.n + 1); c.y = (c.y * c.n + y) / (c.n + 1); c.n++;
+    if (key) c.keys.add(key);
+    c.kinds.add(kind);
+  });
+  STATIONS = [];
+  const fusions = [];
+  mergeClusters(Object.values(groups).flat()).forEach(c => {
+    if (c.merged) fusions.push(c.merged.join(' + '));
+    const keys = [...c.keys].sort((a, b) => RANK(a) - RANK(b) || a.localeCompare(b, 'fr', { numeric: true }));
+    let pos = snapStation([c.x, c.y], keys);
+    const ctr = CENTRES_PLACES[normTxt(c.name.replace(/\(.*?\)/g, ''))];
+    if (ctr && dm(pos, ctr) < 350) pos = ctr;
+    keys.forEach(k => OPS.push({ k, p: pos, n: c.name }));
+    STATIONS.push({ type: 'Feature', geometry: { type: 'Point', coordinates: pos },
+      properties: { _ll: JSON.stringify(pos.map(v => +v.toFixed(5))), nom: c.name, _name: c.name, _norm: normTxt(c.name), _lines: JSON.stringify(keys), _kinds: JSON.stringify([...c.kinds]), _n: keys.length || 1 } });
+  });
+  if (typeof window !== 'undefined') window.RAPPORT_FUSIONS = fusions;
+  return { type: 'FeatureCollection', features: STATIONS };
+}
+const INDIC = { metro: ['Métro', '5h30', '1h15 (2h15 les nuits de ven. et sam.)'], rer: ['RER', '4h45', '0h45 à 1h15'], tram: ['Tramway', '5h30', '0h30'], train: ['Transilien / TER', '4h30', '0h30 à 1h00'] };
+function indicHTML(kinds) {
+  const rows = kinds.filter(k => INDIC[k]).map(k => '<tr><td><b>' + INDIC[k][0] + '</b></td><td>' + INDIC[k][1] + '</td><td>' + INDIC[k][2] + '</td></tr>');
+  if (!rows.length) return '';
+  return '<div class="d"><b>Premier / dernier train</b><table><tr class="m"><td></td><td>Premier</td><td>Dernier</td></tr>' + rows.join('') +
+    '</table><div class="m" style="margin-top:4px">Amplitudes indicatives du mode, vers cette station. Horaires exacts : idfmobilites.fr.</div></div>';
+}
+function gareHTML(p) {
+  const keys = JSON.parse(p._lines || '[]'), kinds = JSON.parse(p._kinds || '[]');
+  let h = '<div class="t">' + esc(p._name) + '</div>';
+  if (keys.length) h += '<div class="d"><b>' + (keys.length > 1 ? 'Correspondances' : 'Ligne') + '</b>' + keys.map(k => '<div class="ln" data-hl="' + esc(k) + '" title="Afficher la ligne seule">' + badge(k) + '<span>' + esc(titleFromKey(k)) + '</span></div>').join('') + '</div>';
+  let t = window.HORAIRES ? horairesHTML(p) : '';
+  if (!window.HORAIRES || /introuvable/.test(t)) t = indicHTML(kinds);
+  let pj = '';
+  try { const L = JSON.parse(p._proj || '[]'); if (L.length) pj = '<div class="d"><b>Prochainement</b>' + L.map(x => '<div class="ln">' + badge(x.k) + '<span>' + esc(x.t) + ' <span class="m">(' + esc(STATUTS[x.s].label.toLowerCase()) + ')</span></span></div>').join('') + '</div>'; } catch (e) {}
+  const ll = p._ll ? JSON.parse(p._ll) : null, go = ll ? '<a class="go" target="_blank" rel="noopener" href="https://citymapper.com/directions?endcoord=' + ll[1] + '%2C' + ll[0] + '&endname=' + encodeURIComponent(p._name) + '">Itinéraire jusqu\'ici ↗</a>' : '';
+  return h + pj + t + go;
+}
+function openStation(f) {
+  const c = f.geometry.coordinates;
+  map.flyTo({ center: c, zoom: Math.max(map.getZoom(), 14.5) });
+  popup && popup.remove();
+  highlight(JSON.parse(f.properties._lines));
+  popup = new maplibregl.Popup({ maxWidth: '320px' }).setLngLat(c).setHTML(f.properties._curated ? projStationHTML(f.properties) : gareHTML(f.properties)).addTo(map);
+  popup.on('close', () => highlight(null));
+}
+/* Recherche : sans accents ni casse, chaque mot tapé peut être le début d'un mot du nom ou comporter une faute de frappe (1 lettre, 2 au-delà de 7 lettres) */
+function lev(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) { const cur = [i]; let mn = i; for (let j = 1; j <= b.length; j++) { cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); mn = Math.min(mn, cur[j]); } if (mn > max) return max + 1; prev = cur; }
+  return prev[b.length];
+}
+function searchScore(norm, v) {
+  if (norm === v) return 100; if (norm.startsWith(v)) return 90; if (norm.includes(v)) return 75;
+  const words = norm.split(' '), qs = v.split(' ').filter(Boolean); let sc = 0;
+  for (const q of qs) {
+    let best = 0;
+    for (const w of words) {
+      if (w.startsWith(q)) best = Math.max(best, 3);
+      else if (q.length >= 4) { const tol = q.length > 7 ? 2 : 1, d = Math.min(lev(q, w, tol), lev(q, w.slice(0, q.length), tol)); if (d <= tol) best = Math.max(best, 2 - (d - 1) * .5); }
+    }
+    if (!best) return 0; sc += best;
+  }
+  return 20 + sc * 10 / qs.length;
+}
+function initSearch() {
+  const q = $('q'), res = $('res');
+  const run = () => {
+    const v = normTxt(q.value).replace(/\bste\b/g, 'sainte').replace(/\bst\b/g, 'saint'); res.innerHTML = '';
+    if (v.length < 2) return;
+    STATIONS.concat(PSTATIONS).map(f => ({ f, sc: searchScore(f.properties._norm || normTxt(f.properties._name), v) })).filter(o => o.sc > 0)
+      .sort((a, b) => b.sc - a.sc || (b.f.properties._n || 1) - (a.f.properties._n || 1)).slice(0, 8).forEach(({ f }) => {
+        const b = document.createElement('button'), keys = JSON.parse(f.properties._lines || '[]');
+        b.innerHTML = esc(f.properties._name) + (f.properties._curated ? ' <span>(future)</span>' : '') + '<span class="rb">' + keys.slice(0, 6).map(k => badge(k)).join('') + (keys.length > 6 ? '<span>+' + (keys.length - 6) + '</span>' : '') + '</span>';
+        b.onclick = () => { res.innerHTML = ''; q.value = f.properties._name; openStation(f); };
+        res.appendChild(b);
+      });
+  };
+  q.addEventListener('input', run);
+  q.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = res.querySelector('button'); if (b) b.click(); } });
+}
+/* ===================== PROJETS : ÉTAT D'AVANCEMENT (recherches au 17 novembre 2026) ===================== */
+const STATUTS = {
+  travaux:      { label: 'En travaux', dash: [1, 1.1], etape: 3 },
+  concertation: { label: 'Concertation publique', dash: [2.2, 1.4], etape: 1 },
+  etude:        { label: "À l'étude", dash: [3.5, 2.2], etape: 0 },
+  hypothese:    { label: 'Hypothèse (faisabilité)', dash: [1, 3.2], etape: -1 }
+};
+const ETAPES = ['Études', 'Concertation', 'Enquête publique', 'Travaux', 'Mise en service'];
+const SRC = {
+  m1idfm: ['IDFM – tracé du prolongement', 'https://www.iledefrance-mobilites.fr/le-reseau/projets/metro1-valdefontenay/le-trace-m1'],
+  m1bat: ['Batinfo – trois variantes', 'https://batinfo.com/actualite/prolongement-de-la-ligne-1-vers-val-de-fontenay-trois-variantes-soumises-a-concertation_37375'],
+  m1etudes: ['IDFM – reprise des études', 'https://www.iledefrance-mobilites.fr/le-reseau/projets/metro1-valdefontenay/actualites/reprise-etudes-m1'],
+  m1drieat: ['DRIEAT – concertation 2026', 'https://www.drieat.ile-de-france.developpement-durable.gouv.fr/prolongement-du-metro-1-a-val-de-fontenay-une-a13605.html?lang=fr'],
+  prog: ['Région IDF – programme de 15 projets (2 juil. 2025)', 'https://www.iledefrance.fr/presse/metro-letat-la-region-ile-de-france-et-ile-de-france-mobilites-engagent-les-etudes-de-15-projets-pour-reduire-les-inegalites-territoriales-et-repondre-aux-defis-des-mobilites-de-demain'],
+  progliste: ['Liste des 15 projets', 'https://www.lejournaltoulousain.fr/ile-de-france/metro-prolongement-etude-327669/'],
+  wikiliste: ['Wikipédia – projets du métro de Paris', 'https://fr.wikipedia.org/wiki/Liste_des_projets_du_m%C3%A9tro_de_Paris'],
+  m10zz: ['Paris ZigZag – ligne 10', 'https://www.pariszigzag.fr/paris-au-quotidien/actualites-paris/metro-ligne-dix-prolongement-paris/'],
+  m10sap: ['Sortiraparis – ligne 10', 'https://www.sortiraparis.com/en/news/in-paris/articles/331682-line-10-metro-paris-extension-project-all-you-need-to-know'],
+  m11wiki: ['Wikipédia – ligne 11', 'https://fr.wikipedia.org/wiki/Ligne_11_du_m%C3%A9tro_de_Paris'],
+  m14bon: ['Le Bonbon – ligne 14 à Morangis', 'https://lebonbon.fr/paris/news/metro-ligne-14-prolongee-essonne/'],
+  m4sap: ['Sortiraparis – ligne 4', 'https://sortiraparis.com/en/news/in-paris/articles/307901-metro-line-4-extended-to-chatenay-malabry'],
+  est: ['Est Ensemble – grands projets (2024)', 'https://www.est-ensemble.fr/grands-projets-de-transports'],
+  gpe: ['Grand Paris Express – avancement', 'https://www.grandparisexpress.fr/gpe-avance'],
+  l18wiki: ['Wikipédia – ligne 18', 'https://fr.wikipedia.org/wiki/Ligne_18_du_m%C3%A9tro_de_Paris'],
+  l19wiki: ['Wikipédia – ligne 19', 'https://fr.wikipedia.org/wiki/Ligne_19_du_m%C3%A9tro_de_Paris'],
+  l19opp: ["Étude d'opportunité ligne 19 (2026)", 'https://www.defense-92.fr/wp-content/uploads/2026/02/Ligne-19_-Etude-d-opportunite-Systra-Mensia.pdf']
+};
+const PROG_SUITE = "Diagnostic territorial et technique attendu mi-2026, puis comparaison et classement des projets fin 2027 ; les plus prometteurs pourront être étudiés plus en détail. Tous ne pourront pas être réalisés d'ici 2040.";
+const PRECIS_SCHEMA = "Tracé schématique : aucun tracé n'est arrêté, la ligne relie seulement les points connus (positions à ± 500 m).";
+const PRECIS_PRINCIPE = 'Tracé de principe : positions des stations à ± 300 m (non géoréférencé).';
+/* ANC : point d'attache sur une station existante, retrouvée par son nom dans les données chargées (sinon position de repli). */
+const ANC = (a, fb, o = {}) => ({ a, fb, alias: o.alias || [], etat: o.etat || 'existante' });
+const TRONCONS = [
+  { id: 'm1-vf', ligne: 'M1', nom: 'Métro 1 : Château de Vincennes – Val de Fontenay', statut: 'concertation',
+    avancement: "Concertation préalable du 5 octobre au 11 décembre 2026, décidée par la CNDP en janvier 2026 ; trois variantes de tracé sont soumises au public. Les études avaient été relancées fin 2024 (financement du contrat de plan État-Région, 9 M€ votés par IDFM) après une première enquête publique en 2022. Le terminus de Val de Fontenay accueillerait l'arrière-gare et le centre de dépannage (scénarios à l'étude).",
+    suite: "Bilan de la CNDP dans le mois suivant la clôture, puis décision d'IDFM et de la RATP sous deux mois ; si le projet se poursuit : études détaillées en 2027 et nouvelle enquête publique vers 2028.",
+    mise: 'vers 2040 (envisagé)', longueur: '≈ 5 km · 3 nouvelles stations', cout: '≈ 1,7 Md€ (estimation citée par la presse)',
+    precision: PRECIS_PRINCIPE + ' Trois variantes sont à l\'étude : le tracé affiché n\'en est qu\'une représentation.',
+    src: [SRC.m1idfm, SRC.m1bat, SRC.m1etudes, SRC.m1drieat],
+    trace: [ANC('Château de Vincennes', [2.4357, 48.8444]), [2.4450, 48.8476], [2.4605, 48.8494], [2.4730, 48.8521], [2.4800, 48.8528], ANC('Val de Fontenay', [2.4872, 48.8517])],
+    stations: [{ nom: 'Les Rigollots', i: 2, prov: true, commune: 'Fontenay-sous-Bois' }, { nom: 'Grands Pêchers', i: 3, prov: true, commune: 'Montreuil' }] },
+
+  { id: 'm2-suresnes', ligne: 'M2', nom: 'Métro 2 : Porte Dauphine – Rueil – Suresnes Mont-Valérien', statut: 'etude',
+    avancement: "Inscrit au programme d'études lancé le 2 juillet 2025 (« ligne 2 vers Rueil – Suresnes Mont-Valérien »). Aucun tracé, aucune station ni aucun calendrier arrêtés. Une prolongation vers Suresnes était déjà proposée en 2011 ; le projet de SDRIF-E de 2024 évoque une liaison avec la station de la ligne 15.",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.prog, SRC.progliste, SRC.wikiliste],
+    trace: [ANC('Porte Dauphine', [2.2766, 48.8723]), [2.2610, 48.8711], [2.2440, 48.8706], [2.2310, 48.8722], ANC('Rueil - Suresnes Mont-Valérien', [2.2205, 48.8738], { etat: 'ligne 15 Ouest, en travaux' })],
+    stations: [] },
+
+  { id: 'm3-becon', ligne: 'M3', nom: 'Métro 3 : Pont de Levallois – Bécon-les-Bruyères', statut: 'etude',
+    avancement: "Inscrit au programme d'études du 2 juillet 2025 (« ligne 3 vers Bécon-les-Bruyères ou Les Vallées »). Déjà inscrit au SDRIF d'avril 2023 ; la demande de 2012, soutenue par la RATP, n'avait pas eu de suite. Bécon-les-Bruyères est aussi une station envisagée pour la ligne 15.",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.prog, SRC.progliste, SRC.wikiliste],
+    trace: [ANC('Pont de Levallois - Bécon', [2.2848, 48.8970], { alias: ['pont de levallois'] }), [2.2760, 48.9005], ANC('Bécon-les-Bruyères', [2.2690, 48.9060])],
+    stations: [] },
+  { id: 'm3-vallees', ligne: 'M3', nom: 'Métro 3 : option vers Les Vallées', statut: 'hypothese',
+    avancement: "Option citée dans le même programme d'études (« ou Les Vallées »), avec un possible prolongement ultérieur vers La Garenne-Colombes ou Colombes. Aucun terminus n'est fixé.",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.prog, SRC.wikiliste],
+    trace: [ANC('Bécon-les-Bruyères', [2.2690, 48.9060]), ANC('Les Vallées', [2.2560, 48.9110])], stations: [] },
+  { id: 'm3-montreuil', ligne: 'M3', nom: 'Métro 3 : Gallieni – Mairie de Montreuil', statut: 'etude',
+    avancement: "Inscrit au programme d'études (« ligne 3 vers Montreuil ») et au SDRIF de 2023 jusqu'à Mairie de Montreuil. Plusieurs options coexistent : Est Ensemble et Bagnolet préfèrent un tracé par le Plateau et les Malassis jusqu'à Montreuil – Hôpital ; un téléphérique avait été préféré au métro pour le quartier de la Noue.",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.prog, SRC.progliste, SRC.wikiliste],
+    trace: [ANC('Gallieni', [2.4162, 48.8658]), [2.4290, 48.8640], ANC('Mairie de Montreuil', [2.4413, 48.8622])], stations: [] },
+
+  { id: 'm4-chatenay', ligne: 'M4', nom: 'Métro 4 : Bagneux – Bourg-la-Reine – Châtenay-Malabry', statut: 'etude',
+    avancement: "Étude de faisabilité financée au contrat de plan État-Région 2024-2028 ; projet inscrit au programme du 2 juillet 2025 (« ligne 4 vers Châtenay-Malabry »). Le tracé évoqué passe par Bourg-la-Reine (en partie en viaduc le long du RER B), reprend l'emprise du RER B jusqu'à Robinson (à mettre aux normes métro), puis un tunnel sous l'avenue Roger-Salengro jusqu'à la station Théâtre La Piscine du T10. La ligne 4 circule jusqu'à Bagneux – Lucie Aubrac depuis janvier 2022.",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.m4sap, SRC.prog, SRC.wikiliste],
+    trace: [ANC('Bagneux - Lucie Aubrac', [2.3112, 48.7968], { alias: ['lucie aubrac'] }), [2.3140, 48.7870], ANC('Bourg-la-Reine', [2.3156, 48.7788]), [2.2990, 48.7782], ANC('Robinson', [2.2689, 48.7790]), [2.2700, 48.7745], ANC('Théâtre La Piscine', [2.2706, 48.7708], { alias: ['la piscine'] })],
+    stations: [] },
+
+  { id: 'm5-rungis', ligne: 'M5', nom: "Métro 5 : Place d'Italie – Place de Rungis", statut: 'etude',
+    avancement: "Inscrit au programme d'études du 2 juillet 2025 (« ligne 5 vers Place de Rungis »), avec une station intermédiaire évoquée. Obstacle technique à Place d'Italie : les lignes 5 et 6 sont au même niveau et la voie d'accès de la ligne 6 à son atelier bloque un prolongement ; les solutions (nouvelle station sous la ligne 6, déplacement de l'atelier) ne sont pas arrêtées.",
+    suite: PROG_SUITE, mise: 'non fixée (au-delà de 2030)', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.prog, SRC.progliste, SRC.wikiliste],
+    trace: [ANC("Place d'Italie", [2.3555, 48.8312]), [2.3547, 48.8252], [2.3522, 48.8190]],
+    stations: [{ nom: 'Station intermédiaire (nom à définir)', i: 1, prov: true, note: 'Évoquée dans les études, emplacement non défini.' }, { nom: 'Place de Rungis', i: 2, prov: true, commune: 'Paris 13e' }] },
+
+  { id: 'm7-drancy', ligne: 'M7', nom: 'Métro 7 : La Courneuve – Mairie de Drancy', statut: 'etude',
+    avancement: "Inscrit au programme d'études du 2 juillet 2025 (« ligne 7 vers Mairie de Drancy »). D'anciennes études évoquaient plutôt un prolongement de 3,7 km par la RN2 jusqu'au Bourget (deux stations, ≈ 340 M€), jamais lancé officiellement.",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.prog, SRC.progliste, SRC.wikiliste],
+    trace: [ANC('La Courneuve - 8 Mai 1945', [2.4100, 48.9208], { alias: ['la courneuve 8 mai 1945'] }), [2.4290, 48.9225], [2.4455, 48.9262]],
+    stations: [{ nom: 'Mairie de Drancy', i: 2, prov: true, commune: 'Drancy' }] },
+
+  { id: 'm9-montreuil', ligne: 'M9', nom: 'Métro 9 : Mairie de Montreuil – Montreuil – Hôpital', statut: 'etude',
+    avancement: "Inscrit au programme d'études du 2 juillet 2025 (« ligne 9 vers Montreuil – Hôpital »). La page d'Est Ensemble (2024) indiquait qu'aucune étude n'était encore lancée ; une ancienne option visait Murs à pêches (≈ 3 km).",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.prog, SRC.progliste, SRC.est, SRC.wikiliste],
+    trace: [ANC('Mairie de Montreuil', [2.4413, 48.8622]), ANC('Montreuil - Hôpital', [2.4560, 48.8678], { alias: ['montreuil hopital'] })], stations: [] },
+
+  { id: 'm10-ivry', ligne: 'M10', nom: "Métro 10 : Gare d'Austerlitz – Ivry-Gambetta", statut: 'etude',
+    avancement: "Inscrit au schéma directeur depuis 2013 et au programme d'études du 2 juillet 2025. En septembre 2026, IDFM signale un « risque fort d'infaisabilité » du tracé prévu près de Bruneseau et des tours Duo : de nouvelles études diront si le tracé peut rester proche ou doit changer dans ce secteur.",
+    suite: PROG_SUITE + " Des élus du Val-de-Marne espèrent une réalisation d'ici 2032.", mise: '2030 visé à l\'origine, désormais incertain', longueur: '≈ 4 à 6,5 km selon les sources · 5 stations', cout: 'non chiffré',
+    precision: PRECIS_PRINCIPE, src: [SRC.m10zz, SRC.m10sap, SRC.prog],
+    trace: [ANC("Gare d'Austerlitz", [2.3652, 48.8422], { alias: ['austerlitz'] }), ANC('Chevaleret', [2.3681, 48.8348]), ANC('Bibliothèque François Mitterrand', [2.3766, 48.8299], { alias: ['bibliotheque francois mitterrand'] }), [2.3830, 48.8262], [2.3868, 48.8214], [2.3893, 48.8168]],
+    stations: [{ nom: 'Masséna – Bruneseau', i: 3, prov: true, commune: 'Paris 13e', note: 'Secteur signalé à « risque fort d\'infaisabilité » (sept. 2026).', corr: ['T3A'] }, { nom: 'Ivry – Nelson Mandela', i: 4, prov: true, commune: 'Ivry-sur-Seine' }, { nom: 'Ivry – Gambetta', i: 5, prov: true, commune: 'Ivry-sur-Seine' }] },
+  { id: 'm10-ardoines', ligne: 'M10', nom: 'Métro 10 : Ivry-Gambetta – Les Ardoines', statut: 'etude',
+    avancement: "Seconde phase d'environ 3,3 à 4 km vers la gare des Ardoines (Vitry-sur-Seine), avec 3 ou 4 stations et correspondance avec la ligne 15 et le RER C. Aucun calendrier annoncé : réalisation attendue après 2030.",
+    suite: PROG_SUITE, mise: 'après 2030, sans date', longueur: '≈ 3,3 à 4 km · 3 ou 4 stations', cout: 'non chiffré', precision: PRECIS_SCHEMA + ' Les stations intermédiaires de Vitry ne sont pas définies.',
+    src: [SRC.m10zz, SRC.m10sap],
+    trace: [[2.3893, 48.8168], [2.3912, 48.8070], [2.3925, 48.7950], ANC('Les Ardoines', [2.3938, 48.7860])], stations: [] },
+  { id: 'm10-stcloud', ligne: 'M10', nom: 'Métro 10 : Boulogne – Pont de Saint-Cloud – Gare de Saint-Cloud', statut: 'hypothese',
+    avancement: "Branche d'environ 1 km avec une station intermédiaire au Parc de Saint-Cloud, citée dans le programme d'études (« M 10 jusqu'à Saint-Cloud ») mais non inscrite au SDRIF et non financée ; certaines sources parlent plutôt d'un prolongement vers Clamart ou Issy-les-Moulineaux.",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: '≈ 1 km', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.progliste, SRC.wikiliste],
+    trace: [ANC('Boulogne - Pont de Saint-Cloud', [2.2282, 48.8406], { alias: ['pont de saint cloud'] }), [2.2230, 48.8425], ANC('Gare de Saint-Cloud', [2.2185, 48.8445])],
+    stations: [{ nom: 'Parc de Saint-Cloud', i: 1, prov: true, commune: 'Saint-Cloud' }] },
+
+  { id: 'm11-noisy', ligne: 'M11', nom: 'Métro 11 : Rosny – Bois-Perrier – Noisy – Champs', statut: 'etude',
+    avancement: "Annoncé par l'État en 2013 (horizon 2020, puis 2025), le prolongement a été reporté sans échéance faute de financement ; les études de faisabilité de 2013-2017 concluaient à une rentabilité insuffisante, conclusion contestée localement. Il figure au programme d'études du 2 juillet 2025 (« ligne 11 vers Noisy – Champs »). La ligne 11 circule jusqu'à Rosny – Bois-Perrier depuis le 13 juin 2024.",
+    suite: PROG_SUITE, mise: 'non fixée (la cible de 2025 est abandonnée)', longueur: '≈ 10 km · 4 stations (d\'après la synthèse jointe, à confirmer)', cout: 'non financé',
+    precision: PRECIS_PRINCIPE, src: [SRC.m11wiki, SRC.prog, SRC.progliste],
+    trace: [ANC('Rosny - Bois-Perrier', [2.4885, 48.8790], { alias: ['rosny bois perrier'] }), [2.5105, 48.8795], [2.5280, 48.8650], [2.5560, 48.8560], ANC('Noisy - Champs', [2.5868, 48.8486], { alias: ['noisy champs'] })],
+    stations: [{ nom: 'Villemomble', i: 1, prov: true, commune: 'Villemomble', note: 'Le Raincy a aussi demandé une correspondance avec le RER E (non retenue à ce stade).' }, { nom: 'Neuilly – Les Fauvettes', i: 2, prov: true }, { nom: 'Neuilly – Hôpitaux', i: 3, prov: true }] },
+
+  { id: 'm12-sevres', ligne: 'M12', nom: "Métro 12 : Mairie d'Issy – Sèvres", statut: 'etude',
+    avancement: "Inscrit au programme d'études du 2 juillet 2025 (« ligne 12 vers Sèvres »). D'anciens projets évoquaient un prolongement d'environ 2 km dans Issy-les-Moulineaux (Gare d'Issy, Issy-Ville, carrefour de la Ferme) ; la destination et les stations ne sont pas arrêtées.",
+    suite: PROG_SUITE, mise: 'non fixée', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.prog, SRC.progliste, SRC.wikiliste],
+    trace: [ANC("Mairie d'Issy", [2.2733, 48.8240], { alias: ['mairie d issy'] }), [2.2480, 48.8255], [2.2205, 48.8275]],
+    stations: [{ nom: 'Sèvres (terminus à préciser)', i: 2, prov: true, commune: 'Sèvres' }] },
+
+  { id: 'm14-morangis', ligne: 'M14', nom: "Métro 14 : Aéroport d'Orly – Morangis", statut: 'etude',
+    avancement: "Études de faisabilité lancées par l'État et la Région (programme du 2 juillet 2025, « ligne 14 vers Morangis »). Le site de maintenance et de remisage de la ligne est déjà à Morangis (72 rames) : il s'agit surtout d'y créer une station. La ligne 14 circule jusqu'à Aéroport d'Orly depuis le 24 juin 2024.",
+    suite: "Décision finale pas avant 2027 ; " + PROG_SUITE, mise: 'vers 2040 (visé)', longueur: 'non précisée · 1 station', cout: 'non chiffré', precision: PRECIS_SCHEMA,
+    src: [SRC.m14bon, SRC.prog, SRC.wikiliste],
+    trace: [ANC("Aéroport d'Orly", [2.3650, 48.7262], { alias: ['aeroport d orly'] }), [2.3480, 48.7150], [2.3320, 48.7040]],
+    stations: [{ nom: 'Morangis (nom à définir)', i: 2, prov: true, commune: 'Morangis' }] },
+
+  { id: 'm18-est', ligne: 'M18', nom: "Ligne 18 : Aéroport d'Orly – Montgeron-Crosne – Boissy-Saint-Léger", statut: 'hypothese', remplace: false,
+    avancement: "Études de faisabilité lancées par la Région en octobre 2024 ; la Société des grands projets a pris des mesures conservatoires à Orly pour permettre ce prolongement après 2030. Plusieurs terminus sont évoqués (Villeneuve-Saint-Georges, Villa Nova / Boissy-Saint-Léger, Montgeron-Crosne) ; aucun n'est choisi.",
+    suite: PROG_SUITE, mise: 'après 2030, sans date', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_SCHEMA + ' Le terminus et le tracé restent à choisir.',
+    src: [SRC.l18wiki, SRC.progliste],
+    trace: [ANC("Aéroport d'Orly", [2.3650, 48.7262], { alias: ['aeroport d orly'] }), [2.4140, 48.7150], ANC('Montgeron - Crosne', [2.4640, 48.7036], { alias: ['montgeron crosne'] }), [2.4880, 48.7300], ANC('Boissy-Saint-Léger', [2.5062, 48.7557])],
+    stations: [] },
+  { id: 'm18-ouest', ligne: 'M18', nom: 'Ligne 18 : Versailles Chantiers – Nanterre La Folie', statut: 'etude', remplace: false,
+    avancement: "Études financées ; un tracé détaillé à quatre stations desservant Parly 2 a été étudié en avril 2024, avec une station intermédiaire à Rueil-Malmaison. Le dossier d'enquête publique était visé début 2027 (information de 2025, à confirmer). Projet étudié hors du programme du 2 juillet 2025.",
+    suite: "Enquête publique visée début 2027 (à confirmer).", mise: 'au-delà de 2030', longueur: 'non précisée', cout: 'non chiffré', precision: PRECIS_PRINCIPE + ' Station de Parly 2 : position à confirmer.',
+    src: [SRC.l18wiki, SRC.progliste, SRC.gpe],
+    trace: [ANC('Versailles Chantiers', [2.1355, 48.7956]), [2.1190, 48.8200], [2.1650, 48.8620], ANC('Rueil-Malmaison', [2.1895, 48.8770]), ANC('Nanterre La Folie', [2.2300, 48.8985], { etat: 'ligne 15 Ouest, en travaux' })],
+    stations: [{ nom: 'Parly 2', i: 1, prov: true, commune: 'Le Chesnay-Rocquencourt', note: 'Desserte de Parly 2 étudiée en avril 2024.' }] },
+
+  { id: 'm19', ligne: 'M19', nom: 'Ligne 19 : Nanterre La Folie – Argenteuil – Saint-Denis – Triangle de Gonesse', statut: 'hypothese',
+    avancement: "Étude d'opportunité publiée en 2026. La Région et le Val-d'Oise financent les études de faisabilité (6,5 M€ annoncés le 22 novembre 2023). Aucun tracé arrêté : 9 à 11 stations selon les variantes, 25 à 30 km majoritairement souterrains. La ligne ne ferait pas partie du Grand Paris Express : son intégration demanderait une loi. Au nord de Gonesse, elle pourrait partager les voies de la ligne 17 (hypothèse).",
+    suite: "Poursuite des études de faisabilité ; aucune décision de réalisation.", mise: 'vers 2040 (visé) ; travaux dans les années 2030', longueur: '25 à 30 km', cout: '≈ 6,5 Md€ (estimation de novembre 2023)',
+    precision: PRECIS_SCHEMA + ' Le tracé entre les points cités est une hypothèse.', src: [SRC.l19wiki, SRC.l19opp, SRC.progliste],
+    trace: [ANC('Nanterre La Folie', [2.2300, 48.8985], { etat: 'ligne 15 Ouest, en travaux' }), [2.2380, 48.9230], ANC('Argenteuil', [2.2480, 48.9470]), [2.2900, 48.9330], [2.3200, 48.9230], ANC('Saint-Denis - Pleyel', [2.3460, 48.9190], { alias: ['pleyel'] }), [2.3900, 48.9500], [2.4300, 48.9750], ANC('Triangle de Gonesse', [2.4610, 48.9930], { etat: 'ligne 17, en travaux' })],
+    stations: [] }
+];
+
+SRC.tz3 = ['IDFM – T Zen 3', 'https://www.iledefrance-mobilites.fr/actualites/t-zen-3-entre-porte-de-pantin-et-pavillon-sous-bois'];
+SRC.tz3b = ['Ville de Pantin – le TZen 3', 'https://www.pantin.fr/la-ville/en-ce-moment/le-tzen-3-est-sur-les-rails-11214/pdf'];
+SRC.tz3c = ['Île-de-France – T Zen 3 : travaux', 'https://www.iledefrance.fr/tous-les-services/ma-region-pres-de-chez-moi/transport-et-mobilite/transports-en-commun/161666-t-zen-3-travaux-entre-porte-de-pantin-et-les-pavillons-sous-bois'];
+SRC.tz5 = ['IDFM – TZen 5', 'https://www.iledefrance-mobilites.fr/le-reseau/projets/tzen5'];
+SRC.tz5b = ['Sortiraparis – les 19 arrêts du TZen 5', 'https://www.sortiraparis.com/en/news/in-paris/articles/355463-tzen-5-here-are-the-names-of-the-19-stops-on-this-future-ile-de-france-bus-line'];
+TRONCONS.push(
+  { id: 'tz3', ligne: 'TZ3', repli: true, nom: 'TZen 3 : Porte de Pantin – Pavillons-sous-Bois (bus à haut niveau de service)', statut: 'travaux',
+    avancement: "Projet voté en 2019 ; premiers travaux de la tranche 1 (déplacement de réseaux, trottoirs, suppression d'un pont) décrits par la Région. Concertation publique du 12 mai au 30 juin 2025 sur la suite du projet. Environ 10 km, 20 à 21 stations dans huit communes (Pantin, Bobigny, Noisy-le-Sec, Bondy, Les Pavillons-sous-Bois…), le long de l'ancienne RN3 ; il remplacera le bus 147. Pantin compte six stations : Porte de Pantin, Hoche, Delizy, Église de Pantin, Ernest-Renan, Raymond-Queneau. Correspondances : T1, T4, M5, T3b, future ligne 15 Est.",
+    suite: "Début des travaux principaux visé fin 2027 (information de 2025, à confirmer).", mise: '2030 (horizon visé)', longueur: '≈ 10 km · 20 à 21 stations', cout: 'non communiqué sur les pages consultées',
+    precision: 'Tracé de principe le long de la RN3 (± 500 m) ; seules les stations de Pantin sont nommées, les autres ne sont pas positionnées. Ce n\'est pas une ligne de métro.',
+    src: [SRC.tz3, SRC.tz3b, SRC.tz3c],
+    trace: [ANC('Porte de Pantin', [2.3925, 48.8883]), ANC('Hoche', [2.4030, 48.8910]), ANC('Église de Pantin', [2.4095, 48.8940], { alias: ['eglise de pantin'] }), [2.4215, 48.9000], [2.4400, 48.9045], [2.4600, 48.9060], [2.4800, 48.9040], [2.4950, 48.9050], ANC('Les Pavillons-sous-Bois', [2.5100, 48.9068])],
+    stations: [] },
+  { id: 'tz5', ligne: 'TZ5', repli: true, nom: 'TZen 5 : Bibliothèque François-Mitterrand – Choisy-le-Roi (bus à haut niveau de service)', statut: 'travaux',
+    avancement: "Ligne de 9,5 km et 19 stations entre Paris 13e, Ivry-sur-Seine, Vitry-sur-Seine et Choisy-le-Roi, en site propre sur presque tout le parcours, bus 100 % électriques. IDFM publie des informations de chantier à Paris 13e et à Ivry. Mise en service annoncée début 2028. Les 19 arrêts : BnF, Avenue de France, Bruneseau, Bretagne, Jean Compagnon, Avenir, Ivry-Gambetta, Ivry-Port-Confluences, Baignade, Marguerite Duras, Berthie Albrecht, Edith Cavell, Pont du Port à l'Anglais, Fusillés, Ateliers, Les Ardoines, André Léo, Lugo-Docteur Roux, Choisy-Régnier. Correspondances : RER C, M14, M15, T3a, T9, TVM, bus 393.",
+    suite: 'Poursuite des travaux ; mise en service début 2028.', mise: 'début 2028', longueur: '≈ 9,5 km · 19 stations', cout: 'non communiqué sur les pages consultées',
+    precision: 'Tracé de principe le long de la Seine (± 400 m) ; seuls quelques arrêts sont positionnés. Ce n\'est pas une ligne de métro.',
+    src: [SRC.tz5, SRC.tz5b],
+    trace: [ANC('Bibliothèque François Mitterrand', [2.3766, 48.8299], { alias: ['bibliotheque francois mitterrand'] }), [2.3810, 48.8265], [2.3875, 48.8195], ANC('Ivry-Gambetta', [2.3885, 48.8165], { alias: ['ivry gambetta'] }), [2.3925, 48.8100], [2.3960, 48.8030], [2.4000, 48.7970], [2.3975, 48.7900], ANC('Les Ardoines', [2.3935, 48.7858]), [2.4010, 48.7770], [2.4080, 48.7680], [2.4115, 48.7640]],
+    stations: [{ nom: 'Ivry-Port-Confluences', i: 4, prov: false, commune: 'Ivry-sur-Seine' }, { nom: 'Pont du Port à l\'Anglais', i: 6, prov: false, commune: 'Vitry-sur-Seine' }, { nom: 'Choisy-Régnier', i: 11, prov: false, commune: 'Choisy-le-Roi' }] }
+);
+let PSTATIONS = [];
+/* Retrouve une station existante par son nom dans les données chargées ; position de repli sinon. */
+function smoothProj(fc) {
+  fc.features.forEach(f => { if (f.geometry && f.geometry.type === 'LineString' && f.geometry.coordinates.length > 2) f.geometry.coordinates = smoothLine(f.geometry.coordinates, []); });
+  return fc;
+}
+function resolveAnchor(a) {
+  const names = [a.a].concat(a.alias).map(normTxt);
+  let best = null;
+  STATIONS.forEach(f => {
+    const n = f.properties._norm, exact = names.some(x => n === x), part = names.some(x => n.includes(x) || (n.length > 5 && x.includes(n)));
+    if (!exact && !part) return;
+    const c = f.geometry.coordinates, d = dm(c, a.fb) + (exact ? 0 : 400);
+    if (d < 2500 && (!best || d < best.d)) best = { d, f, c };
+  });
+  return best ? { c: best.c.slice(), f: best.f } : { c: a.fb.slice(), f: null };
+}
+function etapesHTML(st) {
+  const cur = STATUTS[st] ? STATUTS[st].etape : 0;
+  return '<div class="tl">' + ETAPES.map((e, i) => '<span class="' + (st === 'hypothese' ? '' : i < cur ? 'done' : i === cur ? 'cur' : '') + '">' + e + '</span>').join('') + '</div>' +
+    (st === 'hypothese' ? '<div class="m" style="margin-top:3px">Avant le stade des études : faisabilité ou opportunité seulement.</div>' : '');
+}
+function srcHTML(list) {
+  return list && list.length ? '<div class="m" style="margin-top:6px">Sources : ' + list.map(x => '<a href="' + esc(x[1]) + '" target="_blank" rel="noopener">' + esc(x[0]) + '</a>').join(' · ') + '</div>' : '';
+}
+function ordreHTML(t) {
+  const parts = t.trace.map((pt, i) => {
+    if (!Array.isArray(pt)) return esc(pt.a) + ' <span class="m">(' + esc(pt.etat) + ')</span>';
+    const s = (t.stations || []).find(x => x.i === i);
+    return s ? '<b>' + esc(s.nom) + '</b> <span class="m">(nouvelle' + (s.prov ? ', nom provisoire' : '') + ')</span>' : null;
+  }).filter(Boolean);
+  return parts.length ? '<div class="d"><b>Stations, dans l\'ordre :</b><br>' + parts.join(' → ') + '</div>' : '';
+}
+function projetHTML(p) {
+  const t = TRONCONS.find(x => x.id === p._pid); if (!t) return '';
+  let h = '<div class="ln">' + badge(t.ligne, p._c) + '<span class="t">' + esc(t.nom) + '</span></div>';
+  h += '<div class="d"><b>État d\'avancement : ' + esc(STATUTS[t.statut].label) + '</b>' + etapesHTML(t.statut) + '<div style="margin-top:6px">' + esc(t.avancement) + '</div>' +
+    (t.suite ? '<div class="m" style="margin-top:4px"><b>Prochaine étape :</b> ' + esc(t.suite) + '</div>' : '') + '</div>';
+  h += ordreHTML(t);
+  h += '<div class="d"><b>Mise en service :</b> ' + esc(t.mise) + '<br><b>Longueur :</b> ' + esc(t.longueur) + '<br><b>Coût :</b> ' + esc(t.cout) + '</div>';
+  return h + '<div class="m" style="margin-top:6px">' + esc(t.precision) + '</div>' + srcHTML(t.src);
+}
+function projStationHTML(p) {
+  const t = TRONCONS.find(x => x.id === p._pid); if (!t) return '';
+  const s = (t.stations || []).find(x => x.nom === p.nom) || {}, corr = JSON.parse(p.corr || '[]');
+  let h = '<div class="t">' + esc(p.nom) + '</div><div class="ln">' + badge(t.ligne, p._c) + '<span class="l">Future station · ' + esc(titleFromKey(t.ligne)) + (s.prov ? ' · nom provisoire' : '') + '</span></div>';
+  if (p.commune) h += '<div class="m">' + esc(p.commune) + '</div>';
+  h += '<div class="d"><b>État d\'avancement : ' + esc(STATUTS[t.statut].label) + '</b>' + etapesHTML(t.statut) + (s.note ? '<div style="margin-top:6px">' + esc(s.note) + '</div>' : '') + '</div>';
+  if (corr.length) h += '<div class="d"><b>Correspondances envisagées</b>' + corr.map(k => '<div class="ln">' + badge(k) + '<span>' + esc(titleFromKey(k)) + '</span></div>').join('') + '</div>';
+  h += '<div class="d"><b>Mise en service :</b> ' + esc(t.mise) + '<br><span class="m">Premiers et derniers trains : pas encore définis.</span></div>';
+  return h + '<div class="m" style="margin-top:6px">Position indicative (± 300 à 500 m). Tronçon : ' + esc(t.nom) + '.</div>' + srcHTML(t.src);
+}
+/* Construit les tronçons et futures stations ; relie chaque projet aux stations existantes qu'il dessert (« Prochainement » dans leur fenêtre). */
+function buildProjects() {
+  const lines = [], stations = [];
+  TRONCONS.forEach(t => {
+    const c = OFFICIAL[t.ligne] || LINE_COLORS[t.ligne] || MODE_COLOR[famOf(t.ligne)];
+    const coords = t.trace.map(pt => {
+      if (Array.isArray(pt)) return pt.slice();
+      const r = resolveAnchor(pt);
+      if (r.f) {
+        const arr = JSON.parse(r.f.properties._proj || '[]');
+        if (!arr.some(x => x.p === t.id)) arr.push({ k: t.ligne, t: t.nom, s: t.statut, p: t.id });
+        r.f.properties._proj = JSON.stringify(arr);
+      }
+      return r.c;
+    });
+    const keepPts = [coords[0], coords[coords.length - 1]].concat((t.stations || []).map(x => coords[x.i]));
+    const sm = smoothLine(coords, keepPts);
+    (t.stations || []).forEach(x => { x._pt = coords[x.i]; });
+    lines.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: sm },
+      properties: { _curated: true, _pid: t.id, _key: t.ligne, _sel: t.ligne, _c: c, _st: t.statut, _build: t.statut === 'travaux', _remplace: t.remplace !== false && !t.repli, _repli: !!t.repli, nom: t.nom, _label: t.nom, mise_en_service: t.mise, _an: yearOf(t.mise) } });
+    (t.stations || []).forEach(s => stations.push({ type: 'Feature', geometry: { type: 'Point', coordinates: s._pt.slice() },
+      properties: { _curated: true, _pid: t.id, _key: t.ligne, _c: c, _st: t.statut, _an: yearOf(t.mise), nom: s.nom, _name: s.nom, _norm: normTxt(s.nom), commune: s.commune || '', corr: JSON.stringify(s.corr || []),
+        _lines: JSON.stringify([t.ligne].concat(s.corr || [])), _n: 1 + (s.corr || []).length } }));
+  });
+  return { lines, stations };
+}
+
+/* Contours officiels des communes (API Géo, données publiques), par département d'Île-de-France. */
+async function loadCommunes() {
+  try {
+    const features = await cached('communes-v2', async () => {
+      const parts = await Promise.all(['75', '77', '78', '91', '92', '93', '94', '95'].map(d =>
+        fetch('https://geo.api.gouv.fr/departements/' + d + '/communes?fields=nom,code&format=geojson&geometry=contour').then(r => r.json())));
+      return parts.flatMap(fc => fc.features).map(f => ({ type: 'Feature', properties: f.properties, geometry: simpGeom(f.geometry) }));
+    }, 30 * 864e5);
+    map.getSource('communes').setData({ type: 'FeatureCollection', features });
+    setStatus('s-communes', features.length + '');
+  } catch (e) { setStatus('s-communes', 'erreur', true); logErr('Communes : ' + e.message); }
+}
+
+/* Cache navigateur : strictement facultatif. Il ne doit jamais bloquer ni retarder le chargement (délais limités, repli direct sur le réseau). */
+const IDB = new Promise(res => {
+  const t = setTimeout(() => res(null), 1500), done = v => { clearTimeout(t); res(v); };
+  try { const r = indexedDB.open('carte-idf', 1); r.onupgradeneeded = () => r.result.createObjectStore('c'); r.onsuccess = () => done(r.result); r.onerror = r.onblocked = () => done(null); } catch (e) { done(null); }
+});
+const okData = v => Array.isArray(v) ? v.length > 0 : !!(v && v.features && v.features.length);
+async function cached(key, fetcher, ttl = 7 * 864e5) {
+  let db = null, hit = null;
+  try {
+    db = await IDB;
+    if (db) hit = await Promise.race([new Promise(res => { try { const q = db.transaction('c').objectStore('c').get(key); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); } catch (e) { res(null); } }), new Promise(res => setTimeout(() => res(null), 2000))]);
+  } catch (e) { hit = null; }
+  if (hit && okData(hit.v) && Date.now() - hit.t < ttl) return hit.v;
+  let v;
+  try { v = await fetcher(); } catch (e) { if (hit && okData(hit.v)) return hit.v; throw e; }
+  if (db && okData(v)) try { db.transaction('c', 'readwrite').objectStore('c').put({ t: Date.now(), v }, key); } catch (e) {}
+  return v;
+}
+function segDist(p, a, b) {
+  const vx = b[0] - a[0], vy = b[1] - a[1], L = vx * vx + vy * vy;
+  const t = L ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / L)) : 0;
+  return Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vy);
+}
+function simpRing(pts) {
+  const n = pts.length, keep = new Uint8Array(n), st = [[0, n - 1]];
+  keep[0] = keep[n - 1] = 1;
+  while (st.length) {
+    const [a, b] = st.pop(); let mx = 0, ix = -1;
+    for (let i = a + 1; i < b; i++) { const d = segDist(pts[i], pts[a], pts[b]); if (d > mx) { mx = d; ix = i; } }
+    if (mx > .0001 && ix > 0) { keep[ix] = 1; st.push([a, ix], [ix, b]); }
+  }
+  const o = pts.filter((_, i) => keep[i]);
+  return (o.length >= 4 ? o : pts).map(c => [+c[0].toFixed(5), +c[1].toFixed(5)]);
+}
+function simpGeom(g) {
+  if (g.type === 'Polygon') return { type: 'Polygon', coordinates: g.coordinates.map(simpRing) };
+  if (g.type === 'MultiPolygon') return { type: 'MultiPolygon', coordinates: g.coordinates.map(pl => pl.map(simpRing)) };
+  return g;
+}
+
+let GARES_FC = null;
+function setGares(fc) { GARES_FC = fc; map.getSource('gares').setData(fc); map.getSource('gares-oval').setData(OVAL_FINAL || ovalFeatures(REF_Z, fc)); }
+/* Données du réseau selon le zoom (palier de 0,5) : les écarts entre lignes parallèles sont recalculés en géométrie. */
+let SHOW_ORIG = false;
+/* La géométrie est calculée UNE fois, à un zoom de référence, puis ne bouge plus : au zoom, tracés et ovales grandissent et rétrécissent
+   avec la carte comme n'importe quel objet, sans aucun saut ni recalcul. */
+/* Les tracés sont calculés une fois ; ils ne bougent plus au zoom. */
+const REF_Z = 14, RAIL_PX = 8;
+let railZ = REF_Z;
+function refreshRail() {
+  if (SHOW_ORIG || !RAIL_FINAL) return;
+  map.getSource('rail').setData(RAIL_FINAL); if (OVAL_FINAL) map.getSource('gares-oval').setData(OVAL_FINAL);
+}
+/* ===================== CARTE ===================== */
+if (typeof maplibregl === 'undefined') {
+  $('map').innerHTML = '<p style="padding:24px;max-width:480px">La bibliothèque de carte (MapLibre) n\'a pas pu se charger. Ouvrez ce fichier directement dans Chrome, Firefox ou Safari, avec une connexion internet, et non dans un aperçu intégré à une application.</p>';
+  throw new Error('MapLibre indisponible');
+}
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://tiles.openfreemap.org/styles/positron',
+  center: [2.35, 48.86], zoom: 10.2, hash: true, attributionControl: { compact: true,
+    customAttribution: 'Données <a href="https://data.iledefrance-mobilites.fr" target="_blank" rel="noopener">Île-de-France Mobilités</a> (Licence Ouverte 2.0)' }
+});
+let styleErrShown = false;
+map.on('error', e => {
+  if (styleErrShown || !e || !e.error) return;
+  if (!map.isStyleLoaded()) { styleErrShown = true; logErr('Le fond de carte ne se charge pas (' + (e.error.message || 'erreur réseau') + '). Ouvrez le fichier directement dans un navigateur, avec internet.'); }
+});
+map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), 'top-right');
+
+const EMPTY = { type: 'FeatureCollection', features: [] };
+let popup = null;
+
+map.on('load', () => {
+  const addLayer0 = map.addLayer.bind(map);
+  map.addLayer = layer => {
+    addLayer0(layer);
+    return map;
+  };
+  // Couleurs d'origine du fond, mémorisées avant d'ajouter nos couches
+  map.getStyle().layers.forEach(l => COLOR_PROPS.forEach(pr => { if (l.paint && l.paint[pr] !== undefined) BASE.push({ id: l.id, prop: pr, value: l.paint[pr] }); }));
+  applyFond();
+  $('fond').value = Math.round(fondT * 100);
+  $('fond').addEventListener('input', e => {
+    fondT = +e.target.value / 100;
+    try { localStorage.setItem('carte-idf-fond2', String(e.target.value)); } catch (err) {}
+    const now = performance.now();   // au plus ~8 rendus par seconde pendant le glissé, rendu final au relâchement
+    if (!rafPending && now - (window._fondT || 0) > 120) { rafPending = true; window._fondT = now; requestAnimationFrame(() => { rafPending = false; applyFond(); }); }
+  });
+  $('fond').addEventListener('change', () => requestAnimationFrame(applyFond));
+
+  ['rail', 'gares', 'gares-oval', 'bus', 'arrets', 'proj', 'projarrets', 'projstations', 'anomalies'].forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY }));
+
+  // Limites communales, sous tout le reste
+  map.addSource('communes', { type: 'geojson', data: EMPTY, tolerance: 1.2 });   // contours simplifiés davantage aux petits zooms (allège le rendu)
+  map.addLayer({ id: 'communes-line', type: 'line', source: 'communes', layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': '#8a5fd1', 'line-opacity': .46, 'line-dasharray': [3, 2.2], 'line-width': 1.5 } });
+  map.addLayer({ id: 'communes-label', type: 'symbol', source: 'communes', minzoom: 12,
+    layout: { 'text-field': ['get', 'nom'], 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-transform': 'uppercase', 'text-letter-spacing': .08 },
+    paint: { 'text-color': violetInk(fondT), 'text-opacity': .8, 'text-halo-color': haloColor(fondT), 'text-halo-width': 2.2, 'text-halo-blur': 1.6 } });
+
+  // Bus en dessous du ferré
+  map.addLayer({ id: 'bus', type: 'line', source: 'bus', minzoom: BUS_MIN_ZOOM, layout: { visibility: 'none', 'line-cap': 'round' },
+    paint: { 'line-color': ['get', '_c'], 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 16, 3], 'line-opacity': .8 } });
+  map.addLayer({ id: 'arrets', type: 'circle', source: 'arrets', minzoom: ARRETS_MIN_ZOOM, layout: { visibility: 'none' },
+    paint: { 'circle-radius': 3.5, 'circle-color': '#e09a1a', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } });
+
+  // Ferré : un liseré sous chaque famille pour la lisibilité
+  const kinds = { train: 2.2, rer: 3, tram: 2.6, metro: 3.2, tzen: 2.8, cable: 2.2 };
+  Object.entries(kinds).forEach(([k, w]) => {
+    map.addLayer({ id: 'casing-' + k, type: 'line', source: 'rail', filter: ['==', ['get', '_kind'], k],
+      layout: { visibility: k === 'train' ? 'none' : 'visible', 'line-cap': 'round' }, paint: { 'line-color': casingColor(fondT), 'line-width': w + 2, 'line-opacity': .75 } });
+    map.addLayer({ id: 'rail-' + k, type: 'line', source: 'rail', filter: ['==', ['get', '_kind'], k],
+      layout: { visibility: k === 'train' ? 'none' : 'visible', 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', '_c'], 'line-width': ['interpolate', ['linear'], ['zoom'], 9, w * .6, 14, w * 1.4], 'line-opacity': 1 } });
+  });
+
+  // Projets : pointillé serré = travaux, pointillé large = prévu
+  Object.entries(STATUTS).forEach(([st, def]) => map.addLayer({ id: 'proj-' + st, type: 'line', source: 'proj', filter: ['==', ['get', '_st'], st], layout: { 'line-join': 'round' },
+    paint: { 'line-color': ['get', '_c'], 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 2.2, 14, 4.4], 'line-dasharray': def.dash, 'line-opacity': 1 } }));
+
+  // Mise en évidence : ligne entière (existante, prolongement et bus) en gras par-dessus le reste
+  const big = ['interpolate', ['linear'], ['zoom'], 9, 5, 14, 11];
+  const bigCasing = ['interpolate', ['linear'], ['zoom'], 9, 8, 14, 15];
+  map.addLayer({ id: 'hl-bus-casing', type: 'line', source: 'bus', filter: NONE, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': casingColor(fondT), 'line-width': bigCasing } });
+  map.addLayer({ id: 'hl-bus', type: 'line', source: 'bus', filter: NONE, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', '_c'], 'line-width': big } });
+  map.addLayer({ id: 'hl-rail-casing', type: 'line', source: 'rail', filter: NONE, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': casingColor(fondT), 'line-width': bigCasing } });
+  map.addLayer({ id: 'hl-rail', type: 'line', source: 'rail', filter: NONE, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', '_c'], 'line-width': big } });
+  map.addLayer({ id: 'hl-proj-casing', type: 'line', source: 'proj', filter: NONE, layout: { 'line-join': 'round' }, paint: { 'line-color': casingColor(fondT), 'line-width': bigCasing } });
+  map.addLayer({ id: 'hl-proj', type: 'line', source: 'proj', filter: NONE, layout: { 'line-join': 'round' }, paint: { 'line-color': ['get', '_c'], 'line-width': big, 'line-dasharray': [2, 1.4] } });
+
+  map.addLayer({ id: 'projarrets', type: 'circle', source: 'projarrets', minzoom: 10, layout: { visibility: 'none' },
+    paint: { 'circle-radius': 4, 'circle-color': '#ffffff', 'circle-stroke-color': '#e0457b', 'circle-stroke-width': 2 } });
+  const multi = ['>', ['coalesce', ['get', '_n'], 1], 1], hub = ['>=', ['coalesce', ['get', '_n'], 1], 3];
+  /* grosses correspondances (4 lignes et plus) : un ovale placé en travers des lignes remplace le rond, pour aérer les croisements */
+  const ovW = ['interpolate', ['linear'], ['zoom'], 13, 9, 16, 12];   // fin, proche d'un gros point ; ovale seulement à partir du zoom 13
+  map.addLayer({ id: 'gares-oval-halo', type: 'line', source: 'gares-oval', minzoom: 13, layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#1b2330', 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 15, 16, 18] } });
+  map.addLayer({ id: 'gares-oval', type: 'line', source: 'gares-oval', minzoom: 13, layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#ffffff', 'line-width': ovW } });
+  map.addLayer({ id: 'gares', type: 'circle', source: 'gares', minzoom: 10, filter: ['<', ['coalesce', ['get', '_n'], 1], 4],
+    paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, ['case', hub, 3.8, multi, 3, 1.5], 15, ['case', hub, 9.5, multi, 8, 5]], 'circle-color': '#ffffff', 'circle-stroke-color': '#1b2330', 'circle-stroke-width': ['case', hub, 3, multi, 2.5, 1.5] } });
+  map.addLayer({ id: 'gares-hub', type: 'circle', source: 'gares', minzoom: 10, maxzoom: 13, filter: ['>=', ['coalesce', ['get', '_n'], 1], 4],
+    paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, ['case', hub, 3.8, multi, 3, 1.5], 15, ['case', hub, 9.5, multi, 8, 5]], 'circle-color': '#ffffff', 'circle-stroke-color': '#1b2330', 'circle-stroke-width': ['case', hub, 3, multi, 2.5, 1.5] } });
+  map.addLayer({ id: 'gares-label-hub', type: 'symbol', source: 'gares', minzoom: 11, maxzoom: 13, filter: ['>=', ['coalesce', ['get', '_n'], 1], 4],
+    layout: { 'text-field': ['get', '_name'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, .9], 'text-anchor': 'top', 'text-optional': true },
+    paint: { 'text-color': inkColor(fondT), 'text-halo-color': haloColor(fondT), 'text-halo-width': 2.2, 'text-halo-blur': 1.6 } });
+  map.addLayer({ id: 'gares-label', type: 'symbol', source: 'gares', minzoom: 13,
+    layout: { 'text-field': ['get', '_name'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, .9], 'text-anchor': 'top', 'text-optional': true },
+    paint: { 'text-color': inkColor(fondT), 'text-halo-color': haloColor(fondT), 'text-halo-width': 2.2, 'text-halo-blur': 1.6 } });
+
+  map.addLayer({ id: 'projstations', type: 'circle', source: 'projstations', minzoom: 9.5,
+    paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 15, 7], 'circle-color': '#ffffff', 'circle-stroke-color': ['get', '_c'], 'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 15, 3.2] } });
+  map.addLayer({ id: 'projstations-label', type: 'symbol', source: 'projstations', minzoom: 12,
+    layout: { 'text-field': ['get', 'nom'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, .9], 'text-anchor': 'top', 'text-optional': true },
+    paint: { 'text-color': inkColor(fondT), 'text-halo-color': haloColor(fondT), 'text-halo-width': 2.2, 'text-halo-blur': 1.6 } });
+
+  const clickable = ['gares', 'gares-hub', 'gares-oval', 'projstations', 'projarrets', 'arrets', 'rail-metro', 'rail-tram', 'rail-tzen', 'rail-cable', 'rail-rer', 'rail-train', 'bus'].concat(Object.keys(STATUTS).map(st => 'proj-' + st));
+  clickable.forEach(id => {
+    map.on('mouseenter', id, () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', id, () => map.getCanvas().style.cursor = '');
+  });
+  map.on('click', e => {
+    const hit = map.queryRenderedFeatures(e.point, { layers: clickable.filter(id => map.getLayer(id)) })[0];
+    popup && popup.remove();
+    if (!hit) { highlight(null); return; }
+    const p = hit.properties, id = hit.layer.id;
+    const station = ['gares', 'gares-hub', 'gares-oval', 'projarrets', 'arrets'].includes(id);
+    highlight(id === 'projstations' ? [p._key] : station ? stationKeys(p) : [p._sel]);
+    popup = new maplibregl.Popup({ maxWidth: '320px' }).setLngLat(e.lngLat).setHTML(popupHTML(id, p)).addTo(map);
+    popup.on('close', () => highlight(null));
+  });
+  /* survol des stations (pas des tracés) : la même fiche s'ouvre, et se ferme en quittant la station, sauf si elle a été ouverte par un clic */
+  const hoverIds = ['gares', 'gares-hub', 'gares-oval', 'projstations', 'projarrets', 'arrets'];
+  let hoverPop = null, hoverKey = null;
+  const closeHover = () => { if (hoverPop) { hoverPop.remove(); hoverPop = null; hoverKey = null; } };
+  map.on('mousemove', e => {
+    const ids = hoverIds.filter(id => map.getLayer(id)), hit = ids.length && map.queryRenderedFeatures(e.point, { layers: ids })[0];
+    if (!hit) { closeHover(); return; }
+    const key = hit.layer.id + '|' + (hit.properties._name || hit.properties.nom);
+    if (popup && popup.isOpen && popup.isOpen()) return;   // une fiche ouverte au clic reste prioritaire
+    if (key === hoverKey) return;
+    closeHover(); hoverKey = key;
+    hoverPop = new maplibregl.Popup({ maxWidth: '320px', closeButton: false, closeOnClick: false, offset: 12 }).setLngLat(hit.geometry.type === 'Point' ? hit.geometry.coordinates : e.lngLat).setHTML(popupHTML(hit.layer.id, hit.properties)).addTo(map);
+  });
+  map.on('mouseout', closeHover);
+  map.on('click', closeHover);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { popup && popup.remove(); highlight(null); } });
+
+  applyFond();
+  initSearch();
+  map.addLayer({ id: 'anomalies', type: 'circle', source: 'anomalies', layout: { visibility: 'none' },
+    paint: { 'circle-radius': 10, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': ['match', ['get', 't'], 'superposition', '#ff2d95', 'angle vif', '#ffb000', '#2dd4ff'], 'circle-stroke-width': 2.5 } });
+  loadStatic();
+  bindControls();
+  let mvT; map.on('moveend', () => { clearTimeout(mvT); mvT = setTimeout(loadViewport, 350); });
+});
+
+/* ===================== CHARGEMENT ===================== */
+async function loadStatic() {
+  // Le ferré se charge d'abord : ses couleurs servent aux prolongements.
+  const railDone = cached('rail-v1', () => getGeoJSON(DS.rail)).then(fc => { RAIL = decorateRail(fc); buildGrid(); map.getSource('rail').setData(RAIL); setStatus('s-rail', fc.features.length + ''); })
+      .catch(e => { setStatus('s-rail', 'erreur', true); logErr('Réseau ferré : ' + e.message); });
+  let garesDone;
+  const jobs = [
+    railDone, loadCommunes(),
+    garesDone = Promise.all([cached('gares-v1', () => getGeoJSON(DS.gares)), railDone]).then(([fc]) => finishRail(fc))
+      .catch(e => { setStatus('s-gares', 'erreur', true); logErr('Gares : ' + e.message); }),
+    cached('projarrets-v1', () => getGeoJSON(DS.projArrets)).then(fc => { map.getSource('projarrets').setData(fc); setStatus('s-projarrets', fc.features.length + ''); })
+      .catch(e => { setStatus('s-projarrets', 'erreur', true); logErr('Gares en projet : ' + e.message); }),
+    Promise.resolve().then(() => Promise.all([cached('projl-v1', () => getGeoJSON(DS.projLignes), 864e5).then(fc => fc, () => null), railDone, garesDone && garesDone.catch(() => null)])).then(([fc]) => fc).then(fc => {
+      const all = [], cur = buildProjects(), remplaces = new Set(cur.lines.filter(l => l.properties._remplace).map(l => l.properties._key));
+      if (fc) all.push(...(smoothProj(decorateProject(fc, 'IDFM'))).features.filter(f => f.geometry && !f.properties._done && !remplaces.has(f.properties._key))); else logErr('Projets IDFM indisponibles. Seuls les projets étudiés pour cette page sont affichés.');
+      all.push(...decorateProject(PROLONGEMENTS_LOCAUX, 'local').features);
+      const dejaIdfm = new Set(all.map(f => f.properties._key)); RAIL && RAIL.features.forEach(f => dejaIdfm.add(f.properties._key));
+      all.push(...cur.lines.filter(l => !l.properties._repli || !dejaIdfm.has(l.properties._key)));
+      map.getSource('proj').setData({ type: 'FeatureCollection', features: all });
+      PSTATIONS = cur.stations;
+      map.getSource('projstations').setData({ type: 'FeatureCollection', features: cur.stations });
+      if (STATIONS.length) setGares({ type: 'FeatureCollection', features: STATIONS });
+      setStatus('s-projstations', cur.stations.length + '');
+      setStatus('s-proj', all.length + '');
+    })
+  ];
+  await Promise.all(jobs);
+}
+
+/* ---- Tracés définitifs : calculés en arrière-plan (Web Worker, la carte reste fluide) puis gardés en cache ; la visite suivante ne recalcule rien ---- */
+const CALC_VER = 'calc-v3';
+let RAIL_FINAL = null, OVAL_FINAL = null;
+function workerSource() {
+  const all = [...document.scripts].map(x => x.textContent).find(t => t.includes('/* FIN MODULE TRACÉS */') && t.includes('const M_DEG'));
+  if (!all) return null;
+  const mod = all.slice(all.indexOf('const M_DEG'), all.indexOf('/* FIN MODULE TRACÉS */'));
+  return 'const KX = ' + KX + '; const RANK = ' + RANK.toString() + '; const normTxt = ' + normTxt.toString() + '; let OPS = [], RAIL = null, STATIONS = [];\n' + mod +
+    '\nonmessage = e => { try { RAIL = e.data.rail; OPS = e.data.ops; STATIONS = e.data.st; const ok = rebuildRail(); if (!ok) { postMessage({ err: "rien à reconstruire" }); return; }' +
+    ' const rail = railStatic(), oval = ovalFeatures(14, { type: "FeatureCollection", features: STATIONS });' +
+    ' postMessage({ features: rail.features, oval: oval, st: STATIONS, an: (REPORT.anomalies || []).map(a => ({ t: a.t, k: a.k, c: fromM(a.p) })) }); } catch (x) { postMessage({ err: String(x && x.message || x) }); } };';
+}
+function computeRail(st) {
+  const payload = { rail: RAIL, ops: OPS, st: st.features };
+  const local = () => { if (!rebuildRail()) throw new Error('rien à reconstruire'); const rail = railStatic(); return { features: rail.features, oval: ovalFeatures(REF_Z, { type: 'FeatureCollection', features: STATIONS }), st: STATIONS, an: (REPORT.anomalies || []).map(a => ({ t: a.t, k: a.k, c: fromM(a.p) })) }; };
+  return new Promise(resolve => {
+    let w = null; try { const src = workerSource(); if (src && typeof Worker !== 'undefined') w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' }))); } catch (e) { w = null; }
+    if (!w) { resolve(local()); return; }
+    const t = setTimeout(() => { w.terminate(); resolve(local()); }, 60000);
+    w.onmessage = e => { clearTimeout(t); w.terminate(); if (e.data && !e.data.err) resolve(e.data); else { logErr('Calcul en arrière-plan indisponible (' + (e.data && e.data.err) + '), calcul direct.'); resolve(local()); } };
+    w.onerror = () => { clearTimeout(t); w.terminate(); resolve(local()); };
+    w.postMessage(payload);
+  });
+}
+async function finishRail(fc) {
+  const st = buildStations(fc);
+  ORIG = RAIL && typeof structuredClone === 'function' ? structuredClone(RAIL) : null;
+  setGares(st); setStatus('s-gares', st.features.length + '');
+  setStatus('s-rail', (RAIL ? RAIL.features.length : 0) + ' · mise en forme…');
+  try {
+    const key = CALC_VER + '-' + (RAIL ? RAIL.features.length : 0) + '-' + st.features.length + '-' + OPS.length;
+    const res = await cached(key, () => computeRail(st));
+    RAIL_FINAL = { type: 'FeatureCollection', features: res.features }; OVAL_FINAL = res.oval;
+    STATIONS = res.st; const st2 = { type: 'FeatureCollection', features: STATIONS };
+    refreshRail(); setGares(st2);
+    map.getSource('anomalies').setData({ type: 'FeatureCollection', features: (res.an || []).map(a => ({ type: 'Feature', properties: { t: a.t, k: a.k }, geometry: { type: 'Point', coordinates: a.c } })) });
+    setStatus('s-anom', (res.an || []).length + '');
+  } catch (e) { logErr('Reconstruction des tracés ignorée : ' + e.message); RAIL_FINAL = null; if (ORIG) map.getSource('rail').setData(ORIG); }
+  setStatus('s-rail', (RAIL ? RAIL.features.length : 0) + '');
+}
+
+let busCtl, arrCtl;
+const LOADED = { bus: null, arrets: null };
+const grow = b => { const w = b.getWest(), e = b.getEast(), s = b.getSouth(), n = b.getNorth(), dx = (e - w) * .4, dy = (n - s) * .4; return { getWest: () => w - dx, getEast: () => e + dx, getSouth: () => s - dy, getNorth: () => n + dy }; };
+const inside = (b, L) => L && b.getWest() >= L.getWest() && b.getEast() <= L.getEast() && b.getSouth() >= L.getSouth() && b.getNorth() <= L.getNorth();
+async function loadViewport() {
+  const z = map.getZoom(), vb = map.getBounds(), b = grow(vb);
+  const needBus = !inside(vb, LOADED.bus), needArr = !inside(vb, LOADED.arrets);
+  if ($('c-bus').checked && z >= BUS_MIN_ZOOM && needBus) {
+    busCtl && busCtl.abort(); busCtl = new AbortController(); setStatus('s-bus', '…');
+    try { const fc = await getGeoJSON(DS.bus, await bboxWhere(DS.bus, b), busCtl.signal); map.getSource('bus').setData(decorateBus(fc)); LOADED.bus = b; setStatus('s-bus', fc.features.length + ''); }
+    catch (e) { if (e.name !== 'AbortError') { setStatus('s-bus', 'erreur', true); logErr('Bus : ' + e.message); } }
+  } else if ($('c-bus').checked && z < BUS_MIN_ZOOM) setStatus('s-bus', 'zoomer');
+  if ($('c-arrets').checked && z >= ARRETS_MIN_ZOOM && needArr) {
+    arrCtl && arrCtl.abort(); arrCtl = new AbortController(); setStatus('s-arrets', '…');
+    try { const fc = await getGeoJSON(DS.arrets, await bboxWhere(DS.arrets, b), arrCtl.signal); map.getSource('arrets').setData(fc); LOADED.arrets = b; setStatus('s-arrets', fc.features.length + ''); }
+    catch (e) { if (e.name !== 'AbortError') { setStatus('s-arrets', 'erreur', true); logErr('Arrêts : ' + e.message); } }
+  } else if ($('c-arrets').checked && z < ARRETS_MIN_ZOOM) setStatus('s-arrets', 'zoomer');
+}
+
+/* ===================== PANNEAU ===================== */
+function vis(ids, on) { ids.forEach(id => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none')); }
+function bindControls() {
+  ['metro', 'tram', 'tzen', 'cable', 'rer', 'train'].forEach(k => $('c-' + k).addEventListener('change', e => vis(['casing-' + k, 'rail-' + k], e.target.checked)));
+  $('c-anom').addEventListener('change', e => vis(['anomalies'], e.target.checked));
+  $('c-gares').addEventListener('change', e => vis(['gares', 'gares-hub', 'gares-oval', 'gares-oval-halo', 'gares-label', 'gares-label-hub'], e.target.checked));
+  $('c-orig').addEventListener('change', e => { SHOW_ORIG = e.target.checked; if (ORIG) { if (SHOW_ORIG) map.getSource('rail').setData(ORIG); else refreshRail(); } });
+  $('c-communes').addEventListener('change', e => vis(['communes-line', 'communes-label'], e.target.checked));
+  Object.keys(STATUTS).forEach(st => $('c-' + st).addEventListener('change', e => vis(['proj-' + st], e.target.checked)));
+  $('c-projstations').addEventListener('change', e => vis(['projstations', 'projstations-label'], e.target.checked));
+  $('c-projarrets').addEventListener('change', e => vis(['projarrets'], e.target.checked));
+  $('c-bus').addEventListener('change', e => { vis(['bus'], e.target.checked); if (e.target.checked) loadViewport(); else setStatus('s-bus', ''); });
+  $('c-arrets').addEventListener('change', e => { vis(['arrets'], e.target.checked); if (e.target.checked) loadViewport(); else setStatus('s-arrets', ''); });
+  /* horizon : n'affiche que les projets dont la mise en service est prévue au plus tard à l'année choisie (« Tous » : y compris sans date) */
+  const HZ = [2027, 2030, 2035, 99999];
+  const applyHorizon = () => { const y = HZ[+$('horizon').value], cond = ['<=', ['coalesce', ['get', '_an'], 9999], y];
+    Object.keys(STATUTS).forEach(st => map.getLayer('proj-' + st) && map.setFilter('proj-' + st, ['all', ['==', ['get', '_st'], st], cond]));
+    ['projstations', 'projstations-label'].forEach(id => map.getLayer(id) && map.setFilter(id, cond)); };
+  $('horizon').addEventListener('input', applyHorizon);
+  /* clic sur une ligne dans une fiche : seule cette ligne reste en évidence */
+  document.addEventListener('click', e => { const el = e.target.closest && e.target.closest('[data-hl]'); if (el) highlight([el.getAttribute('data-hl')]); });
+  /* mémoire des réglages (cases, fond, horizon) d'une visite à l'autre */
+  const SAVE = 'carte-idf-reglages', inputs = [...document.querySelectorAll('#panel input[type=checkbox], #panel input[type=range]')];
+  const save = () => { try { const o = {}; inputs.forEach(i => { o[i.id] = i.type === 'checkbox' ? i.checked : i.value; }); localStorage.setItem(SAVE, JSON.stringify(o)); } catch (e) {} };
+  try { const o = JSON.parse(localStorage.getItem(SAVE) || 'null'); if (o) inputs.forEach(i => { if (!(i.id in o)) return; if (i.type === 'checkbox') { if (i.checked !== o[i.id]) { i.checked = o[i.id]; i.dispatchEvent(new Event('change')); } } else if (i.value !== String(o[i.id])) { i.value = o[i.id]; i.dispatchEvent(new Event('input')); } }); } catch (e) {}
+  inputs.forEach(i => i.addEventListener(i.type === 'checkbox' ? 'change' : 'input', save));
+  $('reset').addEventListener('click', () => { try { localStorage.removeItem(SAVE); } catch (e) {} location.reload(); });
+  applyHorizon();
+  $('c-projarrets').dispatchEvent(new Event('change'));
+}
+(() => { const b = $('replier'), set = f => { document.body.classList.toggle('ferme', f); b.textContent = f ? '›' : '‹'; b.title = f ? 'Afficher le panneau' : 'Masquer le panneau'; b.setAttribute('aria-expanded', !f); try { localStorage.setItem('carte-idf-ferme', f ? '1' : ''); } catch (e) {} };
+  try { set(localStorage.getItem('carte-idf-ferme') === '1'); } catch (e) {}
+  b.addEventListener('click', () => set(!document.body.classList.contains('ferme'))); })();
+$('toggle').addEventListener('click', () => {
+  const open = $('panel').classList.toggle('open');
+  $('toggle').setAttribute('aria-expanded', open);
+});
+</script>
+</body>
+</html>
