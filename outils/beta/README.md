@@ -10,3 +10,6 @@ relancer
 
 Le script s'arrête avec un message si un passage de `index.html` qu'il remplace a changé.
 Quand la version de test sera validée, `beta.html` remplacera `index.html` et ce dossier disparaîtra.
+
+Sauvegardes (demandées par Oré le 23/11/2026) : `site/sauvegarde-carte-immo.html` (carte telle qu'avant la refonte)
+et `site/sauvegarde-transports.html` (carte des transports d'origine), consultables en ligne au même endroit.
