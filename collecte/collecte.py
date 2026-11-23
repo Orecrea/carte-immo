@@ -290,25 +290,32 @@ MOTS_COURANTS = {norm(x) for x in ["Maison", "Située", "Situé", "Longère", "I
 
 
 def commune_en_tete(a, c):
-    """Commune (non suivie ou différente) nommée dans le titre ou la première ligne de l'annonce, à moins de 40 km."""
-    tete = (a.get("titre") or "") + " . " + (a.get("desc") or "").split("\n")[0][:160]
-    tete = re.sub(r"\b[A-ZÉÈÎÂÔÛÇ]{2,}(?:[\s'-][A-ZÉÈÎÂÔÛÇ]{2,})*\b", lambda m: m.group(0).title(), tete)   # « RUEIL MALMAISON »
-    centre = c.get("centre")
+    """Commune nommée en tête d'annonce comme lieu du bien (« Longère 175 m² Le Chatelet en Brie », « À Lizy-sur-Ourcq… »),
+    à moins de 40 km. Les mentions de voisinage (« à 5 min de Meaux », « proche Melun », « limite Montreuil ») sont ignorées,
+    et si la commune annoncée est elle-même citée comme lieu, on la garde."""
+    tete = (a.get("titre") or "") + " | " + (a.get("desc") or "").strip().split("\n")[0][:160]
+    tete = re.sub(r"\b[A-ZÉÈÊÎÂÔÛÇ]{2,}(?:[\s'-][A-ZÉÈÊÎÂÔÛÇ]{2,})*\b", lambda m: m.group(0).title(), tete)   # « RUEIL MALMAISON »
+    nom_c, centre = norm(c["nom"]).replace("-", " "), c.get("centre")
+    trouvee = None
     for m in NOM_RX.finditer(tete):
+        avant = tete[:m.start()].rstrip()
+        mot = norm(avant.split()[-1]) if avant.split() else ""
+        if not (not avant or avant[-1] in "-–—|:/.(!" or mot in ("a", "sur")):
+            continue                                    # « proche Melun », « gare de Meaux », « Laforêt de Cesson »…
         mots = re.split(r"[\s'-]+", m.group(0).strip())
         while mots:
-            nom = " ".join(mots)
-            n_ = norm(nom).replace("-", " ")
-            if len(n_) < 4 or n_ in MOTS_COURANTS or norm(nom) in PAS_UNE_COMMUNE:
+            n_ = norm(" ".join(mots)).replace("-", " ")
+            if len(n_) < 4 or n_ in MOTS_COURANTS or n_ in PAS_UNE_COMMUNE:
                 break
-            if n_ == norm(c["nom"]).replace("-", " ") or (norm(c["nom"]).replace("-", " ") + " ").startswith(n_ + " "):
-                break                                   # c'est la commune annoncée
-            proches = [h for h in communes_nommees(nom)
+            if n_ == nom_c or (nom_c + " ").startswith(n_ + " "):
+                return None                             # la commune annoncée est citée comme lieu : on la garde
+            proches = [h for h in communes_nommees(n_)
                        if h.get("centre") and centre and km(h["centre"]["coordinates"], centre) <= 40]
             if proches:
-                return min(proches, key=lambda h: km(h["centre"]["coordinates"], centre))
+                trouvee = trouvee or min(proches, key=lambda h: km(h["centre"]["coordinates"], centre))
+                break
             mots = mots[:-1]
-    return None
+    return trouvee
 
 
 def meme_bien(a, b):
