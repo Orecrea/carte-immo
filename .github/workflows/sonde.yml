@@ -6,14 +6,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          set +e; mkdir out; cd out
-          UA="carte-immo/1.0 (outil de recherche personnel ; quelques requetes par jour)"
-          curl -s -A "$UA" -o liste.html -w "%{http_code}\n" https://www.safti.fr/annonces/achat/maison/provins-77160
-          u=$(grep -o 'https://www.safti.fr/annonces/achat/maison/provins-77160/[0-9]*' liste.html | head -1)
-          [ -z "$u" ] && u=https://www.safti.fr$(grep -o '"/annonces/achat/maison/[^"]*[0-9]\{4,\}[^"]*' liste.html | head -1 | tr -d '"')
-          echo "$u" > url.txt; sleep 2
-          curl -s -A "$UA" -o fiche.html -w "%{http_code}\n" "$u"
-          ls -la; cd ..
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -q -r collecte/requirements.txt
+      - env: {CLE_CARTE: '${{ secrets.CLE_CARTE }}'}
+        run: |
+          python outils/essai_lieu.py
           git config user.name s; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add out && git commit -qm out && git push -q origin HEAD:sonde
+          git add out/res.enc && git commit -qm res && git push -q origin HEAD:sonde
+# essai 4
