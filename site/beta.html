@@ -1146,14 +1146,14 @@ function setupLayers(){
        paint:{'circle-color':['get', 'col'], 'circle-radius':['case', ['==', ['get', 'big'], 1], 6.5, 5], 'circle-stroke-color':'#fff', 'circle-stroke-width':2}});
   lay({id:'ci-poi', type:'symbol', source:'poi', filter:['==', ['get', 'kind'], 'icon'], layout:{'icon-image':['get', 'ic'], 'icon-allow-overlap':true, 'icon-ignore-placement':true}});
 
-  // annonces : regroupées à faible zoom (comme avant jusqu'au zoom 12), étiquettes de prix ensuite
-  src('annonces', {cluster:true, clusterMaxZoom:11, clusterRadius:55});
+  // annonces : regroupées jusqu'au niveau du quartier, étiquettes de prix ensuite
+  src('annonces', {cluster:true, clusterMaxZoom:15, clusterRadius:42});
   lay({id:'ci-clusters', type:'circle', source:'annonces', filter:['has', 'point_count'],
        paint:{'circle-color':'#18202f', 'circle-radius':['step', ['get', 'point_count'], 18, 10, 20, 50, 23], 'circle-stroke-width':5, 'circle-stroke-color':'rgba(24,32,47,.18)'}});
   lay({id:'ci-cluster-n', type:'symbol', source:'annonces', filter:['has', 'point_count'],
        layout:{'text-field':['get', 'point_count_abbreviated'], 'text-font':BOLD, 'text-size':13, 'text-allow-overlap':true}, paint:{'text-color':'#fff'}});
   Object.entries(pinImages()).forEach(([k, v]) => putImage(k, v));
-  const pinLayout = img => ({'icon-image':img, 'icon-text-fit':'both', 'icon-text-fit-padding':[3, 7, 3, 7], 'text-field':['get', 'p'], 'text-font':BOLD, 'text-size':12,
+  const pinLayout = img => ({'icon-image':img, 'icon-text-fit':'both', 'icon-text-fit-padding':[3, 7, 3, 7], 'text-field':['get', 'p'], 'text-font':BOLD, 'text-size':12, 'text-max-width':30,
     'icon-allow-overlap':true, 'text-allow-overlap':true, 'icon-ignore-placement':true, 'text-ignore-placement':true, 'symbol-sort-key':['get', 'sk']});
   lay({id:'ci-pins', type:'symbol', source:'annonces', filter:['!', ['has', 'point_count']],
        layout:pinLayout(['case', ['==', ['get', 'fav'], 1], 'pin-fav', ['==', ['get', 'seen'], 1], 'pin-seen', 'pin']),
@@ -1839,13 +1839,17 @@ function cardHTML(l, gone){
 }
 /* Annonces : une seule source de données, dessinée par la carte graphique (regroupement natif) */
 let PIN_N = new Map(), PIN_L = [], pinShown = [], pinInside = new Set();
+/* Plusieurs annonces au même endroit (souvent le centre de la commune) : une seule étiquette « 3 maisons · dès 255 k€ » */
 function pinFeatures(){
   PIN_N = new Map(); PIN_L = [];
-  return FC(pinShown.map((l, n) => {
-    PIN_N.set(String(l.id), n); PIN_L[n] = l;
-    const fav = favs[l.id] ? 1 : 0, out = pinInside.has(l) ? 0 : 1;
+  const groups = new Map();
+  pinShown.forEach(l => { const k = l.lat.toFixed(4) + ',' + l.lng.toFixed(4); (groups.get(k) || groups.set(k, []).get(k)).push(l); });
+  return FC([...groups.values()].map((g, n) => {
+    g.sort((a, b) => a.price - b.price);
+    g.forEach(l => PIN_N.set(String(l.id), n)); PIN_L[n] = g;
+    const l = g[0], fav = g.some(x => favs[x.id]) ? 1 : 0, out = g.some(x => pinInside.has(x)) ? 0 : 1, seen = g.every(x => vus[x.id]) ? 1 : 0;
     return {type:'Feature', id:n, geometry:{type:'Point', coordinates:[l.lng, l.lat]},
-            properties:{n, p:short(l.price), fav, out, seen:vus[l.id] ? 1 : 0, sk:fav ? 3 : out ? 0 : vus[l.id] ? 1 : 2}};
+            properties:{n, p:g.length > 1 ? `${g.length} maisons · dès ${short(l.price)}` : short(l.price), fav, out, seen, sk:fav ? 3 : out ? 0 : seen ? 1 : 2}};
   }));
 }
 function updatePins(){ setSrc('annonces', pinFeatures()); }
@@ -2781,8 +2785,8 @@ $('#themeBtn').onclick = () => setTheme(THEME === 'dark' ? 'light' : 'dark');
 
 /* Clic et survol des annonces sur la carte (une fois les couches créées) */
 whenReady(() => {
-map.on('click', 'ci-pins', e => { const f = e.features[0]; if(f && !addMode) openListing(PIN_L[f.properties.n]); });
-map.on('mouseenter', 'ci-pins', e => { map.getCanvas().style.cursor = 'pointer'; const f = e.features[0]; if(f){ const l = PIN_L[f.properties.n]; hlPin(l.id, true); hlCard(l.id, true); } });
+map.on('click', 'ci-pins', e => { const f = e.features[0]; if(!f || addMode) return; const g = PIN_L[f.properties.n]; openListing(g[0], g.length > 1 ? g : currentList); });
+map.on('mouseenter', 'ci-pins', e => { map.getCanvas().style.cursor = 'pointer'; const f = e.features[0]; if(f){ PIN_L[f.properties.n].forEach(l => { hlPin(l.id, true); hlCard(l.id, true); }); } });
 map.on('mouseleave', 'ci-pins', () => { map.getCanvas().style.cursor = ''; hlPin(0, false); document.querySelectorAll('.card.hl').forEach(c => c.classList.remove('hl')); });
 map.on('click', 'ci-clusters', async e => {
   const f = e.features[0]; if(!f || addMode) return;

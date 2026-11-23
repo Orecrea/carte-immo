@@ -4,8 +4,8 @@ $('#themeBtn').onclick = () => setTheme(THEME === 'dark' ? 'light' : 'dark');
 
 /* Clic et survol des annonces sur la carte (une fois les couches créées) */
 whenReady(() => {
-map.on('click', 'ci-pins', e => { const f = e.features[0]; if(f && !addMode) openListing(PIN_L[f.properties.n]); });
-map.on('mouseenter', 'ci-pins', e => { map.getCanvas().style.cursor = 'pointer'; const f = e.features[0]; if(f){ const l = PIN_L[f.properties.n]; hlPin(l.id, true); hlCard(l.id, true); } });
+map.on('click', 'ci-pins', e => { const f = e.features[0]; if(!f || addMode) return; const g = PIN_L[f.properties.n]; openListing(g[0], g.length > 1 ? g : currentList); });
+map.on('mouseenter', 'ci-pins', e => { map.getCanvas().style.cursor = 'pointer'; const f = e.features[0]; if(f){ PIN_L[f.properties.n].forEach(l => { hlPin(l.id, true); hlCard(l.id, true); }); } });
 map.on('mouseleave', 'ci-pins', () => { map.getCanvas().style.cursor = ''; hlPin(0, false); document.querySelectorAll('.card.hl').forEach(c => c.classList.remove('hl')); });
 map.on('click', 'ci-clusters', async e => {
   const f = e.features[0]; if(!f || addMode) return;
