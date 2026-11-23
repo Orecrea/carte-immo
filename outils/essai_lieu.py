@@ -12,7 +12,7 @@ for x in d['annonces']:
     a = {'titre': x['titre'], 'desc': x['desc'], 'source': x['source'], 'ville': x['city'], 'prix': x['price'], 'lat': None, 'lng': None}
     r = C.verifier_lieu(a, c, list(det.values()))
     if r is None or r is not c:
-        res.append(f"{x['city']} -> {r['nom'] if r else 'ÉCARTÉE'} | {x['titre'][:50]} | {(x['desc'] or '').split(chr(10))[0][:120]}")
+        res.append(f"{x['city']} -> {r['nom'] if r else 'ÉCARTÉE'} | {(x['titre'] or '')[:50]} | {(x['desc'] or '').split(chr(10))[0][:120]}")
 os.makedirs('out', exist_ok=True)
 open('out/res.enc', 'w').write(chiffrer({'res': res, 'journal': C.journal, 'index': len(C._index or {})}, cle))
 print(len(res))
