@@ -1,12 +1,16 @@
 /* Annonces : une seule source de données, dessinée par la carte graphique (regroupement natif) */
 let PIN_N = new Map(), PIN_L = [], pinShown = [], pinInside = new Set();
+/* Plusieurs annonces au même endroit (souvent le centre de la commune) : une seule étiquette « 3 maisons · dès 255 k€ » */
 function pinFeatures(){
   PIN_N = new Map(); PIN_L = [];
-  return FC(pinShown.map((l, n) => {
-    PIN_N.set(String(l.id), n); PIN_L[n] = l;
-    const fav = favs[l.id] ? 1 : 0, out = pinInside.has(l) ? 0 : 1;
+  const groups = new Map();
+  pinShown.forEach(l => { const k = l.lat.toFixed(4) + ',' + l.lng.toFixed(4); (groups.get(k) || groups.set(k, []).get(k)).push(l); });
+  return FC([...groups.values()].map((g, n) => {
+    g.sort((a, b) => a.price - b.price);
+    g.forEach(l => PIN_N.set(String(l.id), n)); PIN_L[n] = g;
+    const l = g[0], fav = g.some(x => favs[x.id]) ? 1 : 0, out = g.some(x => pinInside.has(x)) ? 0 : 1, seen = g.every(x => vus[x.id]) ? 1 : 0;
     return {type:'Feature', id:n, geometry:{type:'Point', coordinates:[l.lng, l.lat]},
-            properties:{n, p:short(l.price), fav, out, seen:vus[l.id] ? 1 : 0, sk:fav ? 3 : out ? 0 : vus[l.id] ? 1 : 2}};
+            properties:{n, p:g.length > 1 ? `${g.length} maisons · dès ${short(l.price)}` : short(l.price), fav, out, seen, sk:fav ? 3 : out ? 0 : seen ? 1 : 2}};
   }));
 }
 function updatePins(){ setSrc('annonces', pinFeatures()); }

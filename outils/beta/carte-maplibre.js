@@ -371,14 +371,14 @@ function setupLayers(){
        paint:{'circle-color':['get', 'col'], 'circle-radius':['case', ['==', ['get', 'big'], 1], 6.5, 5], 'circle-stroke-color':'#fff', 'circle-stroke-width':2}});
   lay({id:'ci-poi', type:'symbol', source:'poi', filter:['==', ['get', 'kind'], 'icon'], layout:{'icon-image':['get', 'ic'], 'icon-allow-overlap':true, 'icon-ignore-placement':true}});
 
-  // annonces : regroupées à faible zoom (comme avant jusqu'au zoom 12), étiquettes de prix ensuite
-  src('annonces', {cluster:true, clusterMaxZoom:11, clusterRadius:55});
+  // annonces : regroupées jusqu'au niveau du quartier, étiquettes de prix ensuite
+  src('annonces', {cluster:true, clusterMaxZoom:15, clusterRadius:42});
   lay({id:'ci-clusters', type:'circle', source:'annonces', filter:['has', 'point_count'],
        paint:{'circle-color':'#18202f', 'circle-radius':['step', ['get', 'point_count'], 18, 10, 20, 50, 23], 'circle-stroke-width':5, 'circle-stroke-color':'rgba(24,32,47,.18)'}});
   lay({id:'ci-cluster-n', type:'symbol', source:'annonces', filter:['has', 'point_count'],
        layout:{'text-field':['get', 'point_count_abbreviated'], 'text-font':BOLD, 'text-size':13, 'text-allow-overlap':true}, paint:{'text-color':'#fff'}});
   Object.entries(pinImages()).forEach(([k, v]) => putImage(k, v));
-  const pinLayout = img => ({'icon-image':img, 'icon-text-fit':'both', 'icon-text-fit-padding':[3, 7, 3, 7], 'text-field':['get', 'p'], 'text-font':BOLD, 'text-size':12,
+  const pinLayout = img => ({'icon-image':img, 'icon-text-fit':'both', 'icon-text-fit-padding':[3, 7, 3, 7], 'text-field':['get', 'p'], 'text-font':BOLD, 'text-size':12, 'text-max-width':30,
     'icon-allow-overlap':true, 'text-allow-overlap':true, 'icon-ignore-placement':true, 'text-ignore-placement':true, 'symbol-sort-key':['get', 'sk']});
   lay({id:'ci-pins', type:'symbol', source:'annonces', filter:['!', ['has', 'point_count']],
        layout:pinLayout(['case', ['==', ['get', 'fav'], 1], 'pin-fav', ['==', ['get', 'seen'], 1], 'pin-seen', 'pin']),
