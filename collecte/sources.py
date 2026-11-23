@@ -310,7 +310,8 @@ def ld_vers_annonce(o, source, prefixe, c):
         "id": prefixe + "-" + (re.findall(r"\d{4,}", url) or [slug(url)[-24:]])[-1], "source": source, "url": url,
         "titre": texte(o.get("name") or bien.get("name")), "desc": texte(o.get("description") or bien.get("description")),
         "prix": prix, "surf": entier(_val(bien.get("floorSize"))), "pieces": entier(bien.get("numberOfRooms")),
-        "chambres": entier(bien.get("numberOfBedrooms")), "terrain": None, "annee": entier(bien.get("yearBuilt")),
+        "chambres": entier(bien.get("numberOfBedrooms")),
+        "terrain": next((entier(_val(p)) for p in (bien.get("additionalProperty") or []) if isinstance(p, dict) and "terrain" in str(p.get("name", "")).lower()), None), "annee": entier(bien.get("yearBuilt")),
         "dpe": None, "ges": None, "photos": [p for p in photos if p and str(p).startswith("http")][:25],
         "lat": nombre(geo.get("latitude")), "lng": nombre(geo.get("longitude")), "approx": True,
         "ville": adr.get("addressLocality") or c["nom"] if isinstance(adr, dict) else c["nom"],
@@ -320,6 +321,41 @@ def ld_vers_annonce(o, source, prefixe, c):
 
 
 # ---------------------------------------------------------------- SAFTI (réseau de mandataires)
+DEJA = {}                      # site -> {id: annonce complète de la collecte précédente} (évite de relire les fiches)
+
+
+def safti_fiche(s, a):
+    """Complète une annonce SAFTI avec sa fiche : toutes les photos, description entière, terrain, année, DPE, taxe foncière."""
+    t = get(s, a["url"]).text
+    for bloc in _ld_blocs(t):
+        for o in _ld_annonces(bloc):
+            img = o.get("image") or []
+            img = [img] if isinstance(img, str) else img
+            photos = [i for i in img if isinstance(i, str) and i.startswith("http")]
+            if photos:
+                a["photos"] = photos[:25]
+            break
+    champ = lambda k: (re.search(r'data-testid="value-' + k + r'"[^>]*>([^<]*)<', t) or [None, None])[1]
+    a["surf"] = entier(champ("surface-habitable")) or a["surf"]
+    a["pieces"] = entier(champ("piece")) or a["pieces"]
+    a["chambres"] = entier(champ("chambre")) or a["chambres"]
+    a["terrain"] = entier(champ("surface-terrain")) or a["terrain"]
+    a["annee"] = entier(champ("annee-construction")) or a["annee"]
+    d = re.search(r"api\.safti\.fr/dpe/fr/DPE_[^/]+/([A-G])/[^/]+/([A-G])/", t)
+    if d:
+        a["dpe"], a["ges"] = d.group(1), d.group(2)
+    accroche = (re.search(r'data-testid="text-accroche-annonce"[^>]*>(.*?)</p>', t, re.S) or [None, ""])[1]
+    corps = (re.search(r'data-testid="text-corps-annonce">(.*?)</div>', t, re.S) or [None, ""])[1]
+    if corps:
+        corps = re.sub(r"<br\s*/?>", "\n", corps)
+        a["desc"] = texte(html.unescape(re.sub(r"<[^>]+>", "", accroche)) + "\n\n" + html.unescape(re.sub(r"<[^>]+>", "", corps)))
+    tf = re.search(r"[Tt]axe fonci[èe]re\s*:?\s*([\d\s\u202f\xa0.]+)\s*€", a["desc"] or "")
+    if tf:
+        a["tf"] = entier(tf.group(1))
+    a["complet"] = True
+    return a
+
+
 def safti(communes, log):
     s = session()
     out, vus = [], set()
@@ -336,8 +372,21 @@ def safti(communes, log):
                     if a["prix"] and a["id"] not in vus and "/maison/" in a["url"]:
                         vus.add(a["id"]); out.append(a)
             pause()
-    if out:
-        log(f"SAFTI : exemple lu {json.dumps({k: out[0][k] for k in ('titre', 'prix', 'surf', 'pieces', 'ville', 'cp', 'lat')}, ensure_ascii=False)}")
+    # fiches : relues seulement pour les nouvelles annonces (ou si le prix a changé)
+    deja, lues = DEJA.get("SAFTI", {}), 0
+    for i, a in enumerate(out):
+        old = deja.get(a["id"])
+        if old and old.get("complet") and old.get("prix") == a["prix"]:
+            out[i] = {**old, "insee": a["insee"], "ville": a["ville"], "cp": a["cp"]}
+            continue
+        if LIMITE and time.time() > LIMITE:
+            continue
+        try:
+            safti_fiche(s, a); lues += 1
+        except (requests.HTTPError, requests.ConnectionError, requests.Timeout):
+            pass
+        pause(.8, 1.8)
+    log(f"SAFTI : {lues} fiche(s) lue(s), {sum(1 for a in out if a.get('complet'))}/{len(out)} annonce(s) complètes")
     return out
 
 

@@ -217,7 +217,6 @@ LIEU_RX = re.compile(
     r"situ[ée]e?s? (?:au c(?:oe|œ)ur d[e'u] |en plein c(?:oe|œ)ur d[e'u] |dans le centre d[e'u] )?[àa]|"
     r"(?:au|en plein) c(?:oe|œ)ur d[e'u](?: la ville d[e'u]| village d[e'u])?)\s*"
     r"((?:Saint|Sainte|Le|La|Les|L')?[\s'-]?[A-ZÉÈÎ][a-zéèêëîïôûç]+(?:[\s'-](?:sur|sous|en|lès|les|le|la|de|du|des|d|et|aux?|[A-ZÉÈÎ][a-zéèêëîïôûç]+)){0,4})")
-_cache_noms = {}
 # noms de régions ou de pays qui sont aussi des noms de communes : jamais pris pour une adresse
 PAS_UNE_COMMUNE = {norm(x) for x in ["Bretagne", "Normandie", "Champagne", "Bourgogne", "Provence", "Alsace", "Lorraine",
     "Picardie", "Auvergne", "Savoie", "Vendée", "Gironde", "Charente", "Touraine", "Sologne", "Beauce", "Brie", "Vexin",
@@ -225,15 +224,20 @@ PAS_UNE_COMMUNE = {norm(x) for x in ["Bretagne", "Normandie", "Champagne", "Bour
     "Ville", "Village", "Centre", "Paris Centre"]}
 
 
+_index = None
+
+
 def communes_nommees(nom):
-    """Communes françaises portant ce nom exact (homonymes compris)."""
-    if nom not in _cache_noms:
+    """Communes françaises portant ce nom exact (homonymes compris) ; liste complète chargée une fois par collecte."""
+    global _index
+    if _index is None:
+        _index = {}
         try:
-            j = get_json("https://geo.api.gouv.fr/communes", params={"nom": nom, "fields": "nom,code,centre", "limit": 20})
-            _cache_noms[nom] = [c for c in j if norm(c["nom"]).replace("-", " ") == norm(nom).replace("-", " ")]
-        except Exception:
-            _cache_noms[nom] = []
-    return _cache_noms[nom]
+            for x in get_json("https://geo.api.gouv.fr/communes", params={"fields": "nom,code,centre", "format": "json"}):
+                _index.setdefault(norm(x["nom"]).replace("-", " "), []).append(x)
+        except Exception as e:
+            log(f"Liste des communes indisponible ({type(e).__name__})")
+    return _index.get(norm(nom).replace("-", " "), [])
 
 
 def km(p, q):
@@ -262,7 +266,56 @@ def verifier_lieu(a, c, communes):
         if homonymes and c.get("centre") and all(km(h["centre"]["coordinates"], c["centre"]) > 5 for h in homonymes if h.get("centre")):
             log(f"Écartée : {a['source']} {a['ville']} {a['prix']} € (le texte situe le bien à {nom})")
             return None
+    # « 10 kms de Meaux » : le bien n'est pas dans la commune annoncée
+    m = re.search(r"(\d+)\s*kms?\s+(?:de|d')\s*" + re.escape(norm(c["nom"]).replace("-", " ")).replace("\\ ", "[ -]"), norm(texte_annonce[:400]))
+    if m and int(m.group(1)) >= 3:
+        log(f"Écartée : {a['source']} {a['ville']} {a['prix']} € (le texte la situe à {m.group(1)} km de la commune)")
+        return None
+    # nom de commune cité seul en tête d'annonce (« Longère 6 pièces 175 m² Le Chatelet en Brie »)
+    autre = commune_en_tete(a, c)
+    if autre:
+        suivie = next((x for x in communes if x["code"] == autre["code"]), None)
+        if suivie:
+            a["insee"], a["ville"], a["lat"], a["lng"] = suivie["code"], suivie["nom"], None, None
+            return suivie
+        log(f"Écartée : {a['source']} {a['ville']} {a['prix']} € (le texte situe le bien à {autre['nom']})")
+        return None
     return c
+
+
+NOM_RX = re.compile(r"(?:(?:Saint|Sainte|Le|La|Les|L')[\s'-]?)?[A-ZÉÈÎ][a-zéèêëîïôûç]+(?:[\s'-]+(?:sur|sous|en|lès|les|le|la|de|du|des|d'|et|aux?|[A-ZÉÈÎ][a-zéèêëîïôûç]+))*")
+MOTS_COURANTS = {norm(x) for x in ["Maison", "Située", "Situé", "Longère", "Investissement", "Rue", "Gare", "Centre", "Plein", "Pied",
+    "Plain", "Proche", "Belle", "Beau", "Superbe", "Charmante", "Exclusivité", "Exclusivite", "Village", "Ville", "Quartier",
+    "Propriété", "Pavillon", "Visite", "Terrain", "Jardin", "Coup", "Coeur", "Idéal", "Rare", "Vente", "Nouveau", "Prix", "Sous", "Sol"]}
+
+
+def commune_en_tete(a, c):
+    """Commune nommée en tête d'annonce comme lieu du bien (« Longère 175 m² Le Chatelet en Brie », « À Lizy-sur-Ourcq… »),
+    à moins de 40 km. Les mentions de voisinage (« à 5 min de Meaux », « proche Melun », « limite Montreuil ») sont ignorées,
+    et si la commune annoncée est elle-même citée comme lieu, on la garde."""
+    tete = (a.get("titre") or "") + " | " + (a.get("desc") or "").strip().split("\n")[0][:160]
+    tete = re.sub(r"\b[A-ZÉÈÊÎÂÔÛÇ]{2,}(?:[\s'-][A-ZÉÈÊÎÂÔÛÇ]{2,})*\b", lambda m: m.group(0).title(), tete)   # « RUEIL MALMAISON »
+    nom_c, centre = norm(c["nom"]).replace("-", " "), c.get("centre")
+    trouvee = None
+    for m in NOM_RX.finditer(tete):
+        avant = tete[:m.start()].rstrip()
+        mot = norm(avant.split()[-1]) if avant.split() else ""
+        if not (not avant or avant[-1] in "-–—|:/.(!²" or avant[-1].isdigit() or mot in ("a", "sur", "m2")):
+            continue                                    # « proche Melun », « gare de Meaux », « Laforêt de Cesson »…
+        mots = re.split(r"[\s'-]+", m.group(0).strip())
+        while mots:
+            n_ = norm(" ".join(mots)).replace("-", " ")
+            if len(n_) < 4 or n_ in MOTS_COURANTS or n_ in PAS_UNE_COMMUNE:
+                break
+            if n_ == nom_c or (nom_c + " ").startswith(n_ + " "):
+                return None                             # la commune annoncée est citée comme lieu : on la garde
+            proches = [h for h in communes_nommees(n_)
+                       if h.get("centre") and centre and km(h["centre"]["coordinates"], centre) <= 40]
+            if proches:
+                trouvee = trouvee or min(proches, key=lambda h: km(h["centre"]["coordinates"], centre))
+                break
+            mots = mots[:-1]
+    return trouvee
 
 
 def meme_bien(a, b):
@@ -346,6 +399,8 @@ def main():
     lu = etat.setdefault("lu", {})
     principales = [v.get("code") for v in etat.get("villes") or []]
     communes.sort(key=lambda c: (lu.get(c["code"], ""), c["code"] not in principales))
+    sources.DEJA = {nom: {a["id"]: a for a in (etat["cache"].get(nom) or {}).get("annonces", []) if a.get("id")}
+                    for nom in sources.SOURCES}
     sources.LIMITE = time.time() + float(os.environ.get("LIMITE_MIN", 33)) * 60      # GitHub coupe à 45 min : on garde de la marge pour enregistrer
 
     def lire(item):
