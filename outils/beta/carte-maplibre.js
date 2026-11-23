@@ -288,10 +288,11 @@ function darkColor(s, prop){
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
   let h = 0, sat = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
   if(d){ h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if(h < 0) h += 360; }
-  // clair -> sombre ; les textes restent lisibles (clairs), les halos deviennent sombres
-  let L = prop === 'text-color' ? .72 + (1 - l) * .2 : prop === 'text-halo-color' ? .1 : .1 + (1 - l) * .22;
-  if(prop === 'fill-color' && /water|eau/i.test(String(darkColor.layer))) L = .2;
-  sat = Math.min(sat, .35);
+  // clair -> sombre, même calcul que la carte des transports : textes clairs, halos et fonds sombres
+  let L = prop === 'text-color' ? 1 - l * .85 : prop === 'text-halo-color' ? .04 + (1 - l) * .4 : /^line/.test(prop) ? .13 + (1 - l) * .45 : .07 + (1 - l) * .4;
+  if(ROAD_LABEL.test(String(darkColor.layer)) && prop === 'text-color') L = Math.max(L, .82);
+  if(prop === 'line-color' && /highway|road|street|transportation|bridge|tunnel/i.test(String(darkColor.layer))) L = Math.max(L, .24);  // rues visibles
+  sat *= .6;
   const C = (1 - Math.abs(2 * L - 1)) * sat, X = C * (1 - Math.abs((h / 60) % 2 - 1)), m = L - C / 2;
   const [R, G, B] = h < 60 ? [C, X, 0] : h < 120 ? [X, C, 0] : h < 180 ? [0, C, X] : h < 240 ? [0, X, C] : h < 300 ? [X, 0, C] : [C, 0, X];
   return `rgba(${Math.round((R + m) * 255)},${Math.round((G + m) * 255)},${Math.round((B + m) * 255)},${a})`;
@@ -299,10 +300,19 @@ function darkColor(s, prop){
 const mapColors = (v, fn) => Array.isArray(v) ? v.map(x => mapColors(x, fn)) : fn(v);
 const COLOR_PROPS = ['background-color', 'fill-color', 'fill-outline-color', 'line-color', 'text-color', 'text-halo-color', 'fill-extrusion-color'];
 let BASE_PAINT = null;
+/* Noms de rues : un peu plus grands et plus contrastés, en clair comme en sombre */
+const ROAD_LABEL = /(highway|road|street|transportation)[-_]?name|road[-_]?label|street[-_]?label/i;
+const bigger = v => typeof v === 'number' ? Math.round(v * 115) / 100
+  : Array.isArray(v) && v[0] === 'interpolate' ? v.map((x, i) => i >= 4 && i % 2 === 0 && typeof x === 'number' ? Math.round(x * 115) / 100 : x)
+  : v && v.stops ? {...v, stops:v.stops.map(([z, x]) => [z, typeof x === 'number' ? Math.round(x * 115) / 100 : x])} : v;
 function rememberBase(){
   if(BASE_PAINT) return;
   BASE_PAINT = [];
-  map.getStyle().layers.forEach(l => { if(l.id.startsWith('ci-') || !l.paint) return;
+  const LS = map.getStyle().layers;
+  LS.forEach(l => { if(l.type !== 'symbol' || !ROAD_LABEL.test(l.id)) return;
+    try { const ts = l.layout && l.layout['text-size']; if(ts != null) map.setLayoutProperty(l.id, 'text-size', bigger(ts)); } catch(_) {}
+    if(l.paint){ l.paint['text-color'] = '#2f3745'; l.paint['text-halo-color'] = '#ffffff'; l.paint['text-halo-width'] = 1.6; try { map.setPaintProperty(l.id, 'text-halo-width', 1.6); } catch(_) {} } });
+  LS.forEach(l => { if(l.id.startsWith('ci-') || !l.paint) return;
     COLOR_PROPS.forEach(p => { const v = l.paint[p]; if(v != null) BASE_PAINT.push({id:l.id, p, v}); }); });
 }
 function applyMapTheme(){
