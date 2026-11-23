@@ -10,7 +10,7 @@ jobs:
           set +e; mkdir out; cd out
           UA="carte-immo/1.0 (outil de recherche personnel ; quelques requetes par jour)"
           curl -s -A "$UA" -o liste.html -w "%{http_code}\n" https://www.safti.fr/annonces/achat/maison/provins-77160
-          u=$(grep -o 'https://www.safti.fr/annonces/achat/maison/[^"]*[0-9]\{4,\}[^"]*' liste.html | head -1)
+          u=$(grep -o 'https://www.safti.fr/annonces/achat/maison/provins-77160/[0-9]*' liste.html | head -1)
           [ -z "$u" ] && u=https://www.safti.fr$(grep -o '"/annonces/achat/maison/[^"]*[0-9]\{4,\}[^"]*' liste.html | head -1 | tr -d '"')
           echo "$u" > url.txt; sleep 2
           curl -s -A "$UA" -o fiche.html -w "%{http_code}\n" "$u"
