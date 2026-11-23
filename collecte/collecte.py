@@ -300,7 +300,7 @@ def commune_en_tete(a, c):
     for m in NOM_RX.finditer(tete):
         avant = tete[:m.start()].rstrip()
         mot = norm(avant.split()[-1]) if avant.split() else ""
-        if not (not avant or avant[-1] in "-–—|:/.(!" or mot in ("a", "sur")):
+        if not (not avant or avant[-1] in "-–—|:/.(!²" or avant[-1].isdigit() or mot in ("a", "sur", "m2")):
             continue                                    # « proche Melun », « gare de Meaux », « Laforêt de Cesson »…
         mots = re.split(r"[\s'-]+", m.group(0).strip())
         while mots:
