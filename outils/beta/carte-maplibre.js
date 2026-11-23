@@ -126,8 +126,8 @@ function setBase(k){
   document.querySelectorAll('[name=base]').forEach(r => r.checked = r.value === k);
 }
 function syncPt(){
-  // la carte des transports (ÖPNVKarte) porte ses propres noms de rues : elle passe au-dessus du fond
-  vis('pt', LAYERS.transports.on);
+  vis(['tc-bus', 'tc-rail-casing', 'tc-rail', 'tc-arrets', 'tc-gares', 'tc-gares-label'], LAYERS.transports.on);
+  if(LAYERS.transports.on && typeof loadTcViewport === 'function') loadTcViewport();
   vis('velo', LAYERS.velo.on);
 }
 
@@ -317,9 +317,9 @@ function applyMapTheme(){
   map.setPaintProperty('ci-clusters', 'circle-stroke-color', dark ? 'rgba(232,236,242,.22)' : 'rgba(24,32,47,.18)');
   map.setPaintProperty('ci-cluster-n', 'text-color', dark ? '#18202f' : '#ffffff');
   ['ci-communes-main', 'ci-communes-nb'].forEach(id => map.setPaintProperty(id, 'line-color', ['coalesce', ['get', 'c'], dark ? '#c9d1dd' : '#18202f']));
-  map.setPaintProperty('pt', 'raster-brightness-min', dark ? .85 : 0);
-  map.setPaintProperty('pt', 'raster-brightness-max', dark ? .08 : 1);
-  map.setPaintProperty('pt', 'raster-saturation', dark ? -.3 : 0);
+  map.setPaintProperty('tc-rail-casing', 'line-color', dark ? '#141a22' : '#ffffff');
+  map.setPaintProperty('tc-gares-label', 'text-color', dark ? '#e8ecf2' : '#1b2330');
+  map.setPaintProperty('tc-gares-label', 'text-halo-color', dark ? '#141a22' : '#ffffff');
 }
 function setTheme(t){
   THEME = t; store.set('theme', t); document.documentElement.dataset.theme = t;
@@ -352,8 +352,6 @@ function setupLayers(){
   lay({id:'velo', type:'raster', source:'velo', hidden:true}, firstSymbol);
 
   // au-dessus du fond
-  ras('pt', ['https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png'], {maxzoom:18, attribution:'Transports : &copy; <a href="https://www.öpnvkarte.de">ÖPNVKarte</a> / memomaps.de, ' + OSM});
-  lay({id:'pt', type:'raster', source:'pt', hidden:true});
   src('communes');
   lay({id:'ci-communes-fill', type:'fill', source:'communes', paint:{'fill-color':['coalesce', ['get', 'c'], '#18202f'], 'fill-opacity':['case', ['==', ['get', 'main'], 1], .05, .03]}});
   lay({id:'ci-communes-nb', type:'line', source:'communes', filter:['!=', ['get', 'main'], 1], layout:{'line-join':'round'},
@@ -366,6 +364,16 @@ function setupLayers(){
   lay({id:'ci-zones-dash', type:'line', source:'zones', filter:['==', ['get', 'approx'], 1], paint:{'line-color':['get', 'c'], 'line-width':1.5, 'line-dasharray':[2.7, 4]}});
   src('poi-lines');
   lay({id:'ci-futur', type:'line', source:'poi-lines', layout:{'line-cap':'butt'}, paint:{'line-color':'#8e44ad', 'line-width':4, 'line-opacity':.8, 'line-dasharray':[2, 1.5]}});
+  // transports IDFM (sous les annonces)
+  src('tc-bus'); src('tc-rail'); src('tc-gares'); src('tc-arrets');
+  const TCV = LAYERS.transports.on;
+  lay({id:'tc-bus', type:'line', source:'tc-bus', minzoom:12, layout:{'line-cap':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':['get', 'c'], 'line-width':['interpolate', ['linear'], ['zoom'], 12, 1, 16, 2.5], 'line-opacity':.7}});
+  lay({id:'tc-rail-casing', type:'line', source:'tc-rail', layout:{'line-cap':'round', 'line-join':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':'#ffffff', 'line-opacity':.75, 'line-width':['interpolate', ['linear'], ['zoom'], 8, ['+', ['get', 'w'], 1], 14, ['+', ['*', ['get', 'w'], 1.8], 2]]}});
+  lay({id:'tc-rail', type:'line', source:'tc-rail', layout:{'line-cap':'round', 'line-join':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':['get', 'c'], 'line-width':['interpolate', ['linear'], ['zoom'], 8, ['*', ['get', 'w'], .6], 14, ['*', ['get', 'w'], 1.8]]}});
+  lay({id:'tc-arrets', type:'circle', source:'tc-arrets', minzoom:14, layout:{visibility:TCV ? 'visible' : 'none'}, paint:{'circle-radius':3, 'circle-color':'#fff', 'circle-stroke-color':'#e09a1a', 'circle-stroke-width':1.5}});
+  lay({id:'tc-gares', type:'circle', source:'tc-gares', minzoom:10, layout:{visibility:TCV ? 'visible' : 'none'}, paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 10, 2.5, 15, 6], 'circle-color':'#fff', 'circle-stroke-color':'#1b2330', 'circle-stroke-width':['interpolate', ['linear'], ['zoom'], 10, 1.2, 15, 2]}});
+  lay({id:'tc-gares-label', type:'symbol', source:'tc-gares', minzoom:13, layout:{'text-field':['get', 'n'], 'text-font':BOLD, 'text-size':11.5, 'text-offset':[0, 1.1], 'text-anchor':'top', 'text-optional':true, visibility:TCV ? 'visible' : 'none'},
+       paint:{'text-color':'#1b2330', 'text-halo-color':'#ffffff', 'text-halo-width':1.5}});
   src('poi');
   lay({id:'ci-stops', type:'circle', source:'poi', filter:['==', ['get', 'kind'], 'stop'],
        paint:{'circle-color':['get', 'col'], 'circle-radius':['case', ['==', ['get', 'big'], 1], 6.5, 5], 'circle-stroke-color':'#fff', 'circle-stroke-width':2}});
