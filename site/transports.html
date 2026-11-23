@@ -1197,9 +1197,12 @@ function tempsParis(p) {
 }
 function parisHTML(p) {
   const e = tempsParis(p); if (!e) return '';
-  return '<div class="d"><b>Jusqu\'à Paris</b> : ~' + e.m + ' min en moyenne' + (e.min < e.m - 2 ? ' <span class="m">(' + e.min + ' min au plus rapide)</span>' : '') +
+  const t = e.d != null && e.o != null
+    ? ' : ~' + e.d + ' min en train direct · ~' + e.o + ' min en omnibus' + (e.min < e.d - 2 ? ' <span class="m">(' + e.min + ' min au plus rapide)</span>' : '')
+    : ' : ~' + e.m + ' min en moyenne' + (e.min < e.m - 2 ? ' <span class="m">(' + e.min + ' min au plus rapide)</span>' : '');
+  return '<div class="d"><b>Jusqu\'à Paris</b>' + t +
     '<div class="l">Arrivée à ' + esc(e.via) + (e.l && e.l.length ? ' · ' + esc(e.l.join(', ')) : '') + '</div>' +
-    '<div class="m">Trains directs, en semaine aux heures de pointe (6 h-9 h, 18 h-21 h), jusqu\'à la première gare dans Paris.</div></div>';
+    '<div class="m">Sans correspondance, en semaine aux heures de pointe (6 h-9 h, 18 h-21 h), jusqu\'à la première gare dans Paris.</div></div>';
 }
 function gareHTML(p) {
   const keys = JSON.parse(p._lines || '[]'), kinds = JSON.parse(p._kinds || '[]');
