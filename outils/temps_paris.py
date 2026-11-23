@@ -4,6 +4,8 @@
 Pour chaque gare ou station hors de Paris (train, RER, métro, tram) : les trains directs d'un jour de semaine
 qui en partent aux heures de pointe (6 h-9 h et 18 h-21 h) et entrent ensuite dans Paris. Le temps retenu est
 la moyenne des durées jusqu'au premier arrêt dans Paris ; on garde aussi le nom de cet arrêt et la ligne.
+Quand une gare a à la fois des trains directs (ou semi-directs) et des omnibus, nettement différents par le nombre
+d'arrêts intermédiaires, on donne aussi le temps de chacun des deux groupes.
 Résultat écrit dans site/transports.html, entre /*TEMPS_PARIS_DEBUT*/ et /*TEMPS_PARIS_FIN*/.
 
 Usage : python3 outils/temps_paris.py [gtfs.zip] [site/transports.html]
@@ -104,6 +106,22 @@ def libelle(mode, n):
     return n
 
 
+def directs_omnibus(tr):
+    """Sépare les trains directs des omnibus : plus grand écart dans le nombre d'arrêts intermédiaires.
+    Retenu seulement si l'écart est d'au moins 3 arrêts, chaque groupe a 2 trains et les temps diffèrent d'au moins 5 min."""
+    ns = sorted({n for _, n in tr})
+    if len(ns) < 2:
+        return None
+    ecart, seuil = max((b - a, a) for a, b in zip(ns, ns[1:]))
+    if ecart < 3:
+        return None
+    vite = [d for d, n in tr if n <= seuil]; lent = [d for d, n in tr if n > seuil]
+    if len(vite) < 2 or len(lent) < 2 or statistics.mean(lent) - statistics.mean(vite) < 5:
+        return None
+    arr = lambda l: round(statistics.mean(l))
+    return {'d': arr(vite), 'dn': len(vite), 'o': arr(lent), 'on': len(lent)}
+
+
 def calcul(zbytes, rings):
     z = zipfile.ZipFile(io.BytesIO(zbytes))
     d = jour_type(z); actifs = services(z, d)
@@ -134,20 +152,23 @@ def calcul(zbytes, rings):
         for i in range(len(st) - 1, -1, -1):
             _, arr, dep, sid = st[i]
             if dans_paris(sid):
-                prochain = (arr, sid); continue
+                prochain = (arr, sid, i); continue
             if prochain and any(a <= dep % 86400 < b for a, b in PERIODES):
                 g = parent[sid]
-                durees[g].append((prochain[0] - dep) / 60)
+                durees[g].append(((prochain[0] - dep) / 60, prochain[2] - i - 1))
                 via[g][arrets[parent[prochain[1]]][0] if parent[prochain[1]] in arrets else arrets[prochain[1]][0]] += 1
                 par_ligne[g][(mode or '') + ':' + nom_ligne] += 1
     out = defaultdict(list)
-    for g, ds in durees.items():
-        if g not in arrets or len(ds) < 2:
+    for g, tr in durees.items():
+        if g not in arrets or len(tr) < 2:
             continue
         nom, x, y = arrets[g]
+        ds = [d for d, _ in tr]
         ln = [libelle(*k.split(':', 1)) for k, _ in par_ligne[g].most_common(3)]
-        out[norm(nom)].append({'x': round(x, 5), 'y': round(y, 5), 'm': round(statistics.mean(ds)), 'min': round(min(ds)),
-                               'via': via[g].most_common(1)[0][0], 'l': ln, 'n': len(ds)})
+        e = {'x': round(x, 5), 'y': round(y, 5), 'm': round(statistics.mean(ds)), 'min': round(min(ds)),
+             'via': via[g].most_common(1)[0][0], 'l': ln, 'n': len(ds)}
+        e.update(directs_omnibus(tr) or {})
+        out[norm(nom)].append(e)
     print(sum(len(v) for v in out.values()), 'gares avec un temps jusqu\'à Paris')
     return {'jour': d.isoformat(), 'gares': out}
 
