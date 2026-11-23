@@ -10,7 +10,8 @@ Fichiers :
   etat/etat.enc        villes suivies, historique des prix, dernières annonces par site (chiffré)
   site/annonces.enc    ce que lit la carte (chiffré)
 """
-import json, os, re, sys, math, hashlib, unicodedata, traceback
+import json, os, re, sys, math, hashlib, unicodedata, traceback, time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -340,22 +341,46 @@ def main():
     communes = communes_detail(codes)
     log(f"{len(communes)} commune(s) suivie(s)")
 
-    bilan, brutes = {}, []
-    for nom, f in sources.SOURCES.items():
+    # les communes jamais lues (ou lues il y a le plus longtemps) passent en premier :
+    # si le temps manque, ce sont les plus anciennes qui attendent la collecte suivante
+    lu = etat.setdefault("lu", {})
+    principales = [v.get("code") for v in etat.get("villes") or []]
+    communes.sort(key=lambda c: (lu.get(c["code"], ""), c["code"] not in principales))
+    sources.LIMITE = time.time() + float(os.environ.get("LIMITE_MIN", 33)) * 60      # GitHub coupe à 45 min : on garde de la marge pour enregistrer
+
+    def lire(item):
+        nom, f = item
         try:
-            if not communes:
-                break
-            res = f(communes, log)
+            return nom, f(communes, log), None
+        except Exception as e:
+            return nom, None, e
+
+    bilan, brutes = {}, []
+    with ThreadPoolExecutor(max_workers=len(sources.SOURCES)) as pool:   # les sites sont lus en même temps
+        resultats = list(pool.map(lire, sources.SOURCES.items() if communes else []))
+    for nom, res, e in resultats:
+        cache = etat["cache"].get(nom) or {}
+        anciennes = [a for a in cache.get("annonces", []) if a.get("insee") in codes]
+        if e is None:
+            faites = sources.ATTEINTES.get(nom)
+            if faites is not None:                    # communes pas encore lues ce coup-ci : on garde le résultat précédent
+                gardees = [a for a in anciennes if a.get("insee") not in faites]
+                res = res + gardees
             etat["cache"][nom] = {"date": MAINTENANT.isoformat(), "codes": codes, "annonces": res}
             bilan[nom] = {"ok": True, "n": len(res), "msg": f"{len(res)} annonce(s)"}
             log(f"{nom} : {len(res)} annonce(s)")
-        except Exception as e:
-            cache = etat["cache"].get(nom) or {}
-            res = cache.get("annonces", []) if cache.get("codes") == codes else []
+        else:
+            res = anciennes
             raison = "site bloqué temporairement" if isinstance(e, sources.Bloque) else f"erreur ({type(e).__name__})"
             bilan[nom] = {"ok": False, "n": len(res), "msg": raison + (f", {len(res)} annonce(s) gardée(s) du {cache['date'][:10]}" if res else "")}
             log(f"{nom} : {raison} : {e}")
         brutes += res
+    if sources.ATTEINTES:
+        toutes = set.intersection(*sources.ATTEINTES.values())
+        for code in toutes:
+            lu[code] = MAINTENANT.isoformat()
+        if len(toutes) < len(communes):
+            log(f"{len(communes) - len(toutes)} commune(s) seront complétées à la prochaine collecte")
 
     # plafond de prix, rattachement aux communes, localisation vérifiée, enrichissement
     gardees, ecartees = [], []

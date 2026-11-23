@@ -17,6 +17,21 @@ MAX_PAR_COMMUNE = 300          # garde-fou par site et par commune
 PRIX_MAX = 800_000             # au-delà, les annonces sont ignorées dès la collecte (choix d'Oré)
 
 
+LIMITE = None                  # heure (time.time()) à laquelle chaque site s'arrête, pour finir avant la limite de GitHub
+ATTEINTES = {}                 # site -> codes des communes effectivement lues (les autres gardent l'ancien résultat)
+
+
+def parcourir(nom, communes, log):
+    """Parcourt les communes tant qu'il reste du temps ; note celles qui ont été lues."""
+    faites = ATTEINTES.setdefault(nom, set())
+    for i, c in enumerate(communes):
+        if LIMITE and time.time() > LIMITE:
+            log(f"{nom} : temps écoulé, {len(communes) - i} commune(s) reportée(s) à la prochaine collecte")
+            return
+        yield c
+        faites.add(c["code"])
+
+
 class Bloque(Exception):
     """Le site refuse la connexion (protection anti-robot)."""
 
@@ -102,7 +117,7 @@ def viager(titre, desc=""):
 def bienici(communes, log):
     s = session()
     out = []
-    for c in communes:
+    for c in parcourir("Bien'ici", communes, log):
         r = get(s, "https://res.bienici.com/suggest.json", params={"q": c["nom"]}).json()
         zones = [z for z in r if c["code"] in (z.get("insee_codes") or [z.get("insee_code")])] or \
                 [z for z in r if set(z.get("postalCodes") or []) & set(c["codesPostaux"] or [])
@@ -170,6 +185,9 @@ def espaces_atypiques(communes, log):
         pause(.3, .8)
     out = []
     for u, c in urls[:200]:
+        if LIMITE and time.time() > LIMITE:
+            log("Espaces Atypiques : temps écoulé, lecture des fiches interrompue")
+            break
         try:
             t = get(s, u).text
         except requests.HTTPError:
@@ -217,7 +235,7 @@ def notaires(communes, log):
     s = session()
     api = "https://www.immobilier.notaires.fr/pub-services/inotr-www-annonces/v1/annonces"
     out = []
-    for c in communes:
+    for c in parcourir("Notaires de France", communes, log):
         page, pages = 1, 1
         while page <= min(pages, 4):
             j = get(s, api, params={"page": page, "parPage": 100, "typeTransactions": "VENTE", "typeBiens": "MAI",
@@ -305,7 +323,7 @@ def ld_vers_annonce(o, source, prefixe, c):
 def safti(communes, log):
     s = session()
     out, vus = [], set()
-    for c in communes:
+    for c in parcourir("SAFTI", communes, log):
         for cp in (c["codesPostaux"] or [])[:3]:
             r = s.get(f"https://www.safti.fr/annonces/achat/maison/{slug(c['nom'])}-{cp}")
             if r.status_code in (403, 429):
