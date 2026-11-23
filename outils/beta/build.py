@@ -93,8 +93,18 @@ if(!window.L){
 rep("const FRANCE = L.latLngBounds([41.2, -5.6], [51.3, 9.8]);\n", '')
 rep_between('/* =========================================================\n   Carte\n', '/* =========================================================\n   Arrêts de transport',
             (HERE / 'carte-maplibre.js').read_text() + '\n')
+# transports IDFM : après la définition de cached() (mémoire durable des points d'intérêt)
+rep('const POI_TTL = 14 * 864e5;\n', 'const POI_TTL = 14 * 864e5;\n' + (HERE / 'tc.js').read_text())
 
 # Points d'intérêt : des objets GeoJSON au lieu de marqueurs HTML
+rep('''  if(e.bounds) return [(e.bounds.minlat + e.bounds.maxlat)/2, (e.bounds.minlon + e.bounds.maxlon)/2];
+  return null;''', '''  if(e.bounds) return [(e.bounds.minlat + e.bounds.maxlat)/2, (e.bounds.minlon + e.bounds.maxlon)/2];
+  if(e.geometry && e.geometry.length) return [e.geometry.reduce((a, p) => a + p.lat, 0) / e.geometry.length, e.geometry.reduce((a, p) => a + p.lon, 0) / e.geometry.length];
+  return null;''')
+# Seuils d'affichage des couches : exprimés en zoom Leaflet (= zoom MapLibre + 1)
+rep('''async function loadPoi(){
+  const z = map.getZoom();''', '''async function loadPoi(){
+  const z = zL();''')
 rep_between('function drawPoi(k, e, t, c){', '\nlet poiTimer = null', (HERE / 'poi.js').read_text())
 rep('''  const draw = (k, j) => {
     if(ctrl !== poiCtrl) return;

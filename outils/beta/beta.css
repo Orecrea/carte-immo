@@ -77,6 +77,15 @@
   [data-theme=dark] .st-out{background:#232b38;color:#9aa5b5}
   [data-theme=dark] .fav-btn{background:rgba(23,29,38,.85);color:#e8ecf2}
   [data-theme=dark] .cloud .err{color:#ff8a80}
+  [data-theme=dark] .m-desc,[data-theme=dark] .m-cols ul{color:#c9d1dc}
+  [data-theme=dark] .card.seen .price{color:#b4bdca}
+  [data-theme=dark] .price-pin.seen{background:#232b38;color:#b4bdca}
+  [data-theme=dark] .zstatus.ok,[data-theme=dark] [style*="color:#0f766e"]{color:#5eead4!important}
+  [data-theme=dark] .zstatus.approx{color:#fcd34d}
+  [data-theme=dark] .lock-err{color:#ff8a80!important}
+  [data-theme=dark] .flood-val{color:#8cbcf5}
+  [data-theme=dark] .poi.fut{background:#2a2236}
+  [data-theme=dark] .m-note{color:var(--text)}
   [data-theme=dark] img[src^="data:image/svg"]{filter:invert(.88) hue-rotate(180deg)}
   [data-theme=dark] .maplibregl-ctrl-group{background:var(--panel)}
   [data-theme=dark] .maplibregl-ctrl-group button+button{border-top-color:var(--line)}

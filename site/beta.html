@@ -550,6 +550,15 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
   [data-theme=dark] .st-out{background:#232b38;color:#9aa5b5}
   [data-theme=dark] .fav-btn{background:rgba(23,29,38,.85);color:#e8ecf2}
   [data-theme=dark] .cloud .err{color:#ff8a80}
+  [data-theme=dark] .m-desc,[data-theme=dark] .m-cols ul{color:#c9d1dc}
+  [data-theme=dark] .card.seen .price{color:#b4bdca}
+  [data-theme=dark] .price-pin.seen{background:#232b38;color:#b4bdca}
+  [data-theme=dark] .zstatus.ok,[data-theme=dark] [style*="color:#0f766e"]{color:#5eead4!important}
+  [data-theme=dark] .zstatus.approx{color:#fcd34d}
+  [data-theme=dark] .lock-err{color:#ff8a80!important}
+  [data-theme=dark] .flood-val{color:#8cbcf5}
+  [data-theme=dark] .poi.fut{background:#2a2236}
+  [data-theme=dark] .m-note{color:var(--text)}
   [data-theme=dark] img[src^="data:image/svg"]{filter:invert(.88) hue-rotate(180deg)}
   [data-theme=dark] .maplibregl-ctrl-group{background:var(--panel)}
   [data-theme=dark] .maplibregl-ctrl-group button+button{border-top-color:var(--line)}
@@ -901,8 +910,8 @@ function setBase(k){
   document.querySelectorAll('[name=base]').forEach(r => r.checked = r.value === k);
 }
 function syncPt(){
-  // la carte des transports (ÖPNVKarte) porte ses propres noms de rues : elle passe au-dessus du fond
-  vis('pt', LAYERS.transports.on);
+  vis(['tc-bus', 'tc-rail-casing', 'tc-rail', 'tc-arrets', 'tc-gares', 'tc-gares-label'], LAYERS.transports.on);
+  if(LAYERS.transports.on && typeof loadTcViewport === 'function') loadTcViewport();
   vis('velo', LAYERS.velo.on);
 }
 
@@ -1092,9 +1101,9 @@ function applyMapTheme(){
   map.setPaintProperty('ci-clusters', 'circle-stroke-color', dark ? 'rgba(232,236,242,.22)' : 'rgba(24,32,47,.18)');
   map.setPaintProperty('ci-cluster-n', 'text-color', dark ? '#18202f' : '#ffffff');
   ['ci-communes-main', 'ci-communes-nb'].forEach(id => map.setPaintProperty(id, 'line-color', ['coalesce', ['get', 'c'], dark ? '#c9d1dd' : '#18202f']));
-  map.setPaintProperty('pt', 'raster-brightness-min', dark ? .85 : 0);
-  map.setPaintProperty('pt', 'raster-brightness-max', dark ? .08 : 1);
-  map.setPaintProperty('pt', 'raster-saturation', dark ? -.3 : 0);
+  map.setPaintProperty('tc-rail-casing', 'line-color', dark ? '#141a22' : '#ffffff');
+  map.setPaintProperty('tc-gares-label', 'text-color', dark ? '#e8ecf2' : '#1b2330');
+  map.setPaintProperty('tc-gares-label', 'text-halo-color', dark ? '#141a22' : '#ffffff');
 }
 function setTheme(t){
   THEME = t; store.set('theme', t); document.documentElement.dataset.theme = t;
@@ -1127,8 +1136,6 @@ function setupLayers(){
   lay({id:'velo', type:'raster', source:'velo', hidden:true}, firstSymbol);
 
   // au-dessus du fond
-  ras('pt', ['https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png'], {maxzoom:18, attribution:'Transports : &copy; <a href="https://www.öpnvkarte.de">ÖPNVKarte</a> / memomaps.de, ' + OSM});
-  lay({id:'pt', type:'raster', source:'pt', hidden:true});
   src('communes');
   lay({id:'ci-communes-fill', type:'fill', source:'communes', paint:{'fill-color':['coalesce', ['get', 'c'], '#18202f'], 'fill-opacity':['case', ['==', ['get', 'main'], 1], .05, .03]}});
   lay({id:'ci-communes-nb', type:'line', source:'communes', filter:['!=', ['get', 'main'], 1], layout:{'line-join':'round'},
@@ -1141,6 +1148,16 @@ function setupLayers(){
   lay({id:'ci-zones-dash', type:'line', source:'zones', filter:['==', ['get', 'approx'], 1], paint:{'line-color':['get', 'c'], 'line-width':1.5, 'line-dasharray':[2.7, 4]}});
   src('poi-lines');
   lay({id:'ci-futur', type:'line', source:'poi-lines', layout:{'line-cap':'butt'}, paint:{'line-color':'#8e44ad', 'line-width':4, 'line-opacity':.8, 'line-dasharray':[2, 1.5]}});
+  // transports IDFM (sous les annonces)
+  src('tc-bus'); src('tc-rail'); src('tc-gares'); src('tc-arrets');
+  const TCV = LAYERS.transports.on;
+  lay({id:'tc-bus', type:'line', source:'tc-bus', minzoom:12, layout:{'line-cap':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':['get', 'c'], 'line-width':['interpolate', ['linear'], ['zoom'], 12, 1, 16, 2.5], 'line-opacity':.7}});
+  lay({id:'tc-rail-casing', type:'line', source:'tc-rail', layout:{'line-cap':'round', 'line-join':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':'#ffffff', 'line-opacity':.75, 'line-width':['interpolate', ['linear'], ['zoom'], 8, ['+', ['get', 'w'], 1], 14, ['+', ['*', ['get', 'w'], 1.8], 2]]}});
+  lay({id:'tc-rail', type:'line', source:'tc-rail', layout:{'line-cap':'round', 'line-join':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':['get', 'c'], 'line-width':['interpolate', ['linear'], ['zoom'], 8, ['*', ['get', 'w'], .6], 14, ['*', ['get', 'w'], 1.8]]}});
+  lay({id:'tc-arrets', type:'circle', source:'tc-arrets', minzoom:14, layout:{visibility:TCV ? 'visible' : 'none'}, paint:{'circle-radius':3, 'circle-color':'#fff', 'circle-stroke-color':'#e09a1a', 'circle-stroke-width':1.5}});
+  lay({id:'tc-gares', type:'circle', source:'tc-gares', minzoom:10, layout:{visibility:TCV ? 'visible' : 'none'}, paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 10, 2.5, 15, 6], 'circle-color':'#fff', 'circle-stroke-color':'#1b2330', 'circle-stroke-width':['interpolate', ['linear'], ['zoom'], 10, 1.2, 15, 2]}});
+  lay({id:'tc-gares-label', type:'symbol', source:'tc-gares', minzoom:13, layout:{'text-field':['get', 'n'], 'text-font':BOLD, 'text-size':11.5, 'text-offset':[0, 1.1], 'text-anchor':'top', 'text-optional':true, visibility:TCV ? 'visible' : 'none'},
+       paint:{'text-color':'#1b2330', 'text-halo-color':'#ffffff', 'text-halo-width':1.5}});
   src('poi');
   lay({id:'ci-stops', type:'circle', source:'poi', filter:['==', ['get', 'kind'], 'stop'],
        paint:{'circle-color':['get', 'col'], 'circle-radius':['case', ['==', ['get', 'big'], 1], 6.5, 5], 'circle-stroke-color':'#fff', 'circle-stroke-width':2}});
@@ -1205,6 +1222,91 @@ const idb = (() => { let dbp = null; const open = () => dbp || (dbp = new Promis
     async set(k, v){ try { const db = await open(); db.transaction('poi', 'readwrite').objectStore('poi').put(v, k); } catch(_) {} }
   }; })();
 const POI_TTL = 14 * 864e5;
+
+/* =========================================================
+   Transports d'Île-de-France sur la carte des annonces : données officielles IDFM
+   (les mêmes que la carte des transports), dessinées par la carte graphique.
+   Remplace les tuiles ÖPNVKarte, que MapLibre ne peut pas afficher (serveur sans autorisation d'accès croisé).
+   ========================================================= */
+const TC_API = 'https://data.iledefrance-mobilites.fr/api/explore/v2.1/catalog/datasets/';
+const TC_DS = {rail:'traces-du-reseau-ferre-idf', gares:'emplacement-des-gares-idf', bus:'traces-des-lignes-regulieres-de-bus-en-ile-de-france', arrets:'arrets'};
+const TC_MODE = {metro:'#1d6fd0', tram:'#2a9d5c', rer:'#d6402e', train:'#7a5aa6', tzen:'#0f9d9a', cable:'#8b5a2b'};
+const TC_METRO = {M1:'#FFCD00', M2:'#003CA6', M3:'#837902', M3BIS:'#6EC4E8', M4:'#CF009E', M5:'#FF7E2E', M6:'#6ECA97', M7:'#FA9ABA', M7BIS:'#6ECA97',
+  M8:'#E19BDF', M9:'#B6BD00', M10:'#C9910D', M11:'#704B1C', M12:'#007852', M13:'#6EC4E8', M14:'#62259D'};
+const tcPick = (p, re) => { for(const k of Object.keys(p)) if(re.test(k) && p[k] != null && p[k] !== '' && typeof p[k] !== 'object') return p[k]; return null; };
+function tcColor(p, fb){
+  for(const k of Object.keys(p)) if(/colou?r|couleur|hexa/i.test(k) && !/text|texte|print|cmyk/i.test(k)){
+    const v = String(p[k] || '').trim(); if(/^[0-9a-f]{6}$/i.test(v)) return '#' + v; if(/^#[0-9a-f]{3,8}$/i.test(v)) return v; }
+  return fb;
+}
+function tcKind(p){
+  const mode = String(tcPick(p, /^(mode|transportmode|route_type|type)/i) || '').toLowerCase(), label = String(tcPick(p, /^res_com$/i) || tcPick(p, /^(indice|short_?name|nom_?ligne)/i) || '');
+  const lab = label + ' ' + mode + ' ' + String(tcPick(p, /name|nom/i) || '');
+  if(/t\s?-?\s?zen|bhns/i.test(lab)) return ['tzen', label];
+  if(/c[âa]ble|t[ée]l[ée]ph[ée]rique/i.test(lab)) return ['cable', label];
+  if(/metro|subway|métro/.test(mode)) return ['metro', label];
+  if(/tram/.test(mode)) return ['tram', label];
+  if(/^rer/i.test(label) || /^rer/i.test(mode) || /^[A-E]$/.test(label)) return ['rer', label];
+  return ['train', label];
+}
+async function tcGeo(ds, where, signal){
+  const r = await fetch(TC_API + ds + '/exports/geojson?limit=-1&timezone=UTC' + (where ? '&where=' + encodeURIComponent(where) : ''), {signal});
+  if(!r.ok) throw new Error('IDFM ' + r.status); return r.json();
+}
+/* Le nom du champ géographique varie selon les jeux : on le lit dans leur description, comme la carte des transports. */
+const tcFields = {};
+async function tcBoxWhere(ds, [w, s, e, n]){
+  if(!tcFields[ds]){
+    const f = ((await (await fetch(TC_API + ds)).json()).fields) || [], sh = f.find(x => x.type === 'geo_shape'), pt = f.find(x => x.type === 'geo_point_2d');
+    if(!sh && !pt) throw new Error('IDFM ' + ds + ' sans champ géographique');
+    tcFields[ds] = sh ? {n:sh.name, t:'shape'} : {n:pt.name, t:'point'};
+  }
+  const g = tcFields[ds];
+  return g.t === 'point' ? `in_bbox(${g.n},${s},${w},${n},${e})` : `intersects(${g.n},geom'${tcPoly([w, s, e, n])}')`;
+}
+let tcLoaded = false, tcBusBox = null, tcStopBox = null, tcCtl = null;
+async function loadTcNetwork(){
+  if(tcLoaded) return; tcLoaded = true;
+  try {
+    const [rail, gares] = await Promise.all([
+      cached('idfm-rail-v1', () => tcGeo(TC_DS.rail)),
+      cached('idfm-gares-v1', () => tcGeo(TC_DS.gares))
+    ]);
+    rail.features.forEach(f => { const p = f.properties || (f.properties = {}), [k, label] = tcKind(p);
+      const mk = k === 'metro' ? 'M' + String(label).toUpperCase().replace(/\s/g, '').replace(/^M/, '') : '';
+      f.properties = {k, c:TC_METRO[mk] || tcColor(p, TC_MODE[k]), w:k === 'train' ? 2 : k === 'tram' || k === 'tzen' ? 2.4 : 3}; });
+    const seen = new Set();
+    gares.features = gares.features.filter(f => { if(!f.geometry || f.geometry.type !== 'Point') return false;
+      const p = f.properties || {}, n = String(tcPick(p, /^(nom_?gares?|nom_?zda|nom|name|stop_?name)/i) || tcPick(p, /(nom|name)/i) || '');
+      const key = n + Math.round(f.geometry.coordinates[0] * 300) + Math.round(f.geometry.coordinates[1] * 300); if(seen.has(key)) return false; seen.add(key);
+      const [k] = tcKind(p); f.properties = {n, k}; return true; });
+    setSrc('tc-rail', rail); setSrc('tc-gares', gares);
+  } catch(e){ tcLoaded = false; setStatus('Transports IDFM indisponibles pour le moment'); }
+}
+const tcGrow = b => { const dx = (b.getEast() - b.getWest()) * .4, dy = (b.getNorth() - b.getSouth()) * .4; return [b.getWest() - dx, b.getSouth() - dy, b.getEast() + dx, b.getNorth() + dy]; };
+const tcIn = (b, L) => L && b.getWest() >= L[0] && b.getSouth() >= L[1] && b.getEast() <= L[2] && b.getNorth() <= L[3];
+const tcPoly = ([w, s, e, n]) => `POLYGON((${[[w,s],[e,s],[e,n],[w,n],[w,s]].map(p => p.join(' ')).join(',')}))`;
+async function loadTcViewport(){
+  if(!LAYERS.transports.on) return;
+  loadTcNetwork();
+  const z = map.getZoom(), vb = map.getBounds();
+  if(z < 12 || (tcIn(vb, tcBusBox) && (z < 14 || tcIn(vb, tcStopBox)))) return;
+  if(tcCtl) tcCtl.abort(); const ctl = tcCtl = new AbortController(), box = tcGrow(vb);
+  try {
+    if(!tcIn(vb, tcBusBox)){
+      const fc = await tcGeo(TC_DS.bus, await tcBoxWhere(TC_DS.bus, box), ctl.signal);
+      fc.features.forEach(f => { const p = f.properties || {}; f.properties = {c:tcColor(p, '#e09a1a'), n:String(tcPick(p, /(short_?name|shortname|indice|nom_?ligne|name)/i) || '')}; });
+      setSrc('tc-bus', fc); tcBusBox = box;
+    }
+    if(z >= 14 && !tcIn(vb, tcStopBox)){
+      const wh = await tcBoxWhere(TC_DS.arrets, box);
+      const fc = await tcGeo(TC_DS.arrets, wh + ' and arrtype="bus"', ctl.signal).catch(e => { if(e.name === 'AbortError') throw e; return tcGeo(TC_DS.arrets, wh, ctl.signal); });
+      fc.features.forEach(f => { const p = f.properties || {}; f.properties = {n:String(tcPick(p, /^(arrname|nom|name)/i) || '')}; });
+      setSrc('tc-arrets', fc); tcStopBox = box;
+    }
+  } catch(e){ if(e.name !== 'AbortError') setStatus('Bus IDFM indisponibles pour le moment'); }
+}
+map.on('moveend', () => { clearTimeout(loadTcViewport.t); loadTcViewport.t = setTimeout(loadTcViewport, 300); });
 function stopKind(t){
   if(t.railway==='station'||t.railway==='halt'||t.train==='yes') return {k:'train',c:'#1f6feb',l:'Gare'};
   if(t.railway==='tram_stop'||t.subway==='yes'||t.station==='subway'||t.tram==='yes') return {k:'metro',c:'#7b2cbf',l:t.subway==='yes'||t.station==='subway'?'Métro':'Tram'};
@@ -1249,6 +1351,7 @@ function center(e){
   if(e.lat != null) return [e.lat, e.lon];
   if(e.center) return [e.center.lat, e.center.lon];
   if(e.bounds) return [(e.bounds.minlat + e.bounds.maxlat)/2, (e.bounds.minlon + e.bounds.maxlon)/2];
+  if(e.geometry && e.geometry.length) return [e.geometry.reduce((a, p) => a + p.lat, 0) / e.geometry.length, e.geometry.reduce((a, p) => a + p.lon, 0) / e.geometry.length];
   return null;
 }
 function drawPoi(k, e, t, c){
@@ -1299,7 +1402,7 @@ async function cached(key, fn){
   const j = await fn(); const v = {t:Date.now(), j}; poiCache.set(key, v); idb.set(key, v); return j;
 }
 async function loadPoi(){
-  const z = map.getZoom();
+  const z = zL();
   const ks = Object.keys(LAYERS).filter(k => (Q[k] || k === 'ecoles') && LAYERS[k].on && z >= LAYERS[k].minZoom);
   Object.keys(LAYERS).forEach(k => { if((Q[k] || k === 'ecoles') && !ks.includes(k)) LAYERS[k].group.clearLayers(); });
   updateLayerMenu();
