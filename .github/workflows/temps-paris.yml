@@ -1,0 +1,51 @@
+name: Temps jusqu'à Paris (carte des transports)
+
+# Calcule, d'après les horaires officiels IDFM, le temps moyen de chaque gare jusqu'à Paris,
+# l'écrit dans site/transports.html puis republie le site. Une fois par mois, ou à la main.
+on:
+  schedule:
+    - cron: '30 4 2 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: collecte
+  cancel-in-progress: false
+
+jobs:
+  temps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Calcul
+        run: python outils/temps_paris.py site/transports.html
+      - name: Enregistrement
+        id: enr
+        run: |
+          git config user.name "Collecte automatique"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp site/transports.html /tmp/transports.html
+          for i in 1 2 3; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            cp /tmp/transports.html site/transports.html
+            git add site/transports.html
+            git diff --cached --quiet && { echo "rien de neuf"; break; }
+            git commit -qm "Carte des transports : temps jusqu'à Paris mis à jour" && git push -q origin HEAD:main && { echo "publier=1" >> "$GITHUB_OUTPUT"; break; }
+            sleep 5
+          done
+      - if: steps.enr.outputs.publier == '1'
+        uses: actions/configure-pages@v5
+      - if: steps.enr.outputs.publier == '1'
+        uses: actions/upload-pages-artifact@v3
+        with: {path: site}
+      - if: steps.enr.outputs.publier == '1'
+        uses: actions/deploy-pages@v4

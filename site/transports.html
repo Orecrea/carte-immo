@@ -13,6 +13,8 @@
 <script>window.maplibregl || document.write('<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"><\/script>');</script>
 <!-- Premiers et derniers passages par station : bloc rempli par build_horaires.py. Tant qu'il vaut null, la carte fonctionne sans. -->
 <script>/*HORAIRES_DEBUT*/window.HORAIRES = null;/*HORAIRES_FIN*/</script>
+<!-- Temps moyen jusqu'à Paris par gare : bloc rempli par outils/temps_paris.py (GitHub Actions). Tant qu'il vaut null, la ligne n'apparaît pas. -->
+<script>/*TEMPS_PARIS_DEBUT*/window.TEMPS_PARIS = null;/*TEMPS_PARIS_FIN*/</script>
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --fg: #1b2330; --muted: #5d6877; --line: #dde1e7;
@@ -1162,6 +1164,22 @@ function indicHTML(kinds) {
   return '<div class="d"><b>Premier / dernier train</b><table><tr class="m"><td></td><td>Premier</td><td>Dernier</td></tr>' + rows.join('') +
     '</table><div class="m" style="margin-top:4px">Amplitudes indicatives du mode, vers cette station. Horaires exacts : idfmobilites.fr.</div></div>';
 }
+/* Temps moyen jusqu'à Paris (trains directs, heures de pointe en semaine) : gare du même nom la plus proche */
+function tempsParis(p) {
+  const T = window.TEMPS_PARIS; if (!T || !T.gares) return null;
+  const ll = p._ll ? JSON.parse(p._ll) : null; if (!ll) return null;
+  const d = e => dm(ll, [e.x, e.y]);
+  let best = null;
+  (T.gares[normTxt(p._name)] || []).forEach(e => { if (d(e) < 2500 && (!best || d(e) < d(best))) best = e; });
+  if (!best) Object.values(T.gares).forEach(L => L.forEach(e => { if (d(e) < 350 && (!best || d(e) < d(best))) best = e; }));
+  return best;
+}
+function parisHTML(p) {
+  const e = tempsParis(p); if (!e) return '';
+  return '<div class="d"><b>Jusqu\'à Paris</b> : ~' + e.m + ' min en moyenne' + (e.min < e.m - 2 ? ' <span class="m">(' + e.min + ' min au plus rapide)</span>' : '') +
+    '<div class="l">Arrivée à ' + esc(e.via) + (e.l && e.l.length ? ' · ' + esc(e.l.join(', ')) : '') + '</div>' +
+    '<div class="m">Trains directs, en semaine aux heures de pointe (6 h-9 h, 18 h-21 h), jusqu\'à la première gare dans Paris.</div></div>';
+}
 function gareHTML(p) {
   const keys = JSON.parse(p._lines || '[]'), kinds = JSON.parse(p._kinds || '[]');
   let h = '<div class="t">' + esc(p._name) + '</div>';
@@ -1171,7 +1189,7 @@ function gareHTML(p) {
   let pj = '';
   try { const L = JSON.parse(p._proj || '[]'); if (L.length) pj = '<div class="d"><b>Prochainement</b>' + L.map(x => '<div class="ln">' + badge(x.k) + '<span>' + esc(x.t) + ' <span class="m">(' + esc(STATUTS[x.s].label.toLowerCase()) + ')</span></span></div>').join('') + '</div>'; } catch (e) {}
   const ll = p._ll ? JSON.parse(p._ll) : null, go = ll ? '<a class="go" target="_blank" rel="noopener" href="https://citymapper.com/directions?endcoord=' + ll[1] + '%2C' + ll[0] + '&endname=' + encodeURIComponent(p._name) + '">Itinéraire jusqu\'ici ↗</a>' : '';
-  return h + pj + t + go;
+  return h + parisHTML(p) + pj + t + go;
 }
 function openStation(f) {
   const c = f.geometry.coordinates;
