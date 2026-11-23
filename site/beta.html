@@ -1600,6 +1600,13 @@ async function legIso(points, mode, min, z){
     } catch(_) { z.fail = true; z.approx = true; }
   }
   let g = null;
+  // beaucoup de points de départ (ex. toutes les stations de Paris) : à pied et à vélo, cercles estimés
+  // plutôt que des centaines d'appels au serveur de calcul (une requête par seconde au plus)
+  if(mode !== 'transit' && points.length > 25){
+    g = unionAll(points.map(([lat, lng]) => window.turf ? turf.circle([lng, lat], speed(mode) * min / 60, {steps:24}).geometry : circleGeom(lat, lng, speed(mode) * min / 60 * 1000)));
+    z.done += points.length; z.approx = true; renderZoneStatus(z);
+    return g;
+  }
   for(const [lat, lng] of points){
     let p;
     if(mode === 'transit'){ p = circleGeom(lat, lng, speed(mode) * min / 60 * 1000); z.approx = true; }
@@ -1737,7 +1744,7 @@ $('#allStations').onclick = async () => {
     const origins = [], sansGare = [];
     const res = await Promise.all(list.map(c => stationsOf(c.code).catch(() => stationsOf(c.code)).catch(() => null)));
     list.forEach((c, i) => {
-      const st = (res[i] || []).slice(0, 3);                   // gares d'abord, puis RER, métro, tram
+      const st = res[i] || [];                                 // toutes les gares et stations (train, RER, métro, tram ; pas les bus)
       if(st.length) st.forEach(s => { if(!origins.some(o => kmDist(o.lat, o.lng, s.lat, s.lng) < .3)) origins.push({lat:s.lat, lng:s.lng, name:s.name}); });
       else if(c.main !== false){                                // ville choisie sans gare (ou service indisponible) : on part de son centre
         const cc = cities.find(x => x.code === c.code), g = c.geom || geoCache[c.code];
@@ -2351,7 +2358,7 @@ const dest = $('#dest'), dsug = $('#destSug'); let dt = null, dItems = [], dIdx 
 const stationCache = {};
 async function stationsOf(code){
   if(stationCache[code]) return stationCache[code];
-  const q = `[out:json][timeout:20];area["boundary"="administrative"]["admin_level"="8"]["ref:INSEE"="${code}"]->.a;(nwr["railway"~"^(station|halt)$"](area.a);nwr["public_transport"="station"](area.a););out center tags 300;`;
+  const q = `[out:json][timeout:20];area["boundary"="administrative"]["admin_level"="8"]["ref:INSEE"="${code}"]->.a;(nwr["railway"~"^(station|halt)$"](area.a);nwr["public_transport"="station"](area.a););out center tags 1500;`;
   const j = await overpass(q);
   const seen = new Set(), out = [];
   j.elements.forEach(e => {
