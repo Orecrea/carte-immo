@@ -175,7 +175,7 @@ def espaces_atypiques(communes, log):
     for plan in plans:
         try:
             contenu = get(s, plan).text
-        except requests.HTTPError:
+        except (requests.HTTPError, requests.ConnectionError, requests.Timeout):
             log(f"Espaces Atypiques : une partie du plan du site est indisponible ({plan.rsplit('/', 1)[-1]})")
             continue
         for u in re.findall(r"<loc>([^<]+/ventes/[^<]+)</loc>", contenu):
@@ -190,7 +190,7 @@ def espaces_atypiques(communes, log):
             break
         try:
             t = get(s, u).text
-        except requests.HTTPError:
+        except (requests.HTTPError, requests.ConnectionError, requests.Timeout):   # une fiche lente ne bloque plus les autres
             continue
         m = re.search(r'\{[^{}]*"prix_vente"[^{}]*\}', t)
         if not m:
