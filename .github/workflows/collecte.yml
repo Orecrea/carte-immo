@@ -86,6 +86,8 @@ jobs:
       - if: steps.collecte.outputs.publier == '1' || github.event_name == 'push'
         continue-on-error: true
         uses: actions/configure-pages@v5
+      - name: Numéro de version des pages (rechargement automatique chez le visiteur)
+        run: sed -i "s/__VERSION__/${GITHUB_SHA::12}-${GITHUB_RUN_ID}/" site/index.html site/beta.html site/transports.html
       - if: steps.collecte.outputs.publier == '1' || github.event_name == 'push'
         continue-on-error: true
         uses: actions/upload-pages-artifact@v3

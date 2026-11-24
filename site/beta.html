@@ -2,6 +2,16 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<meta name="carte-version" content="__VERSION__">
+<script>/* Toujours la dernière version publiée : GitHub Pages laisse le navigateur garder la page 10 min en cache */
+(function(){ var v = document.querySelector('meta[name=carte-version]').content; if(v.indexOf('__') === 0) return;
+  if(/[?&]v=/.test(location.search)) history.replaceState(null, '', location.pathname + location.hash);
+  fetch(location.pathname + '?nc=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.text(); }).then(function(t){
+    var m = t.match(/name="carte-version" content="([^"]+)"/); if(!m || m[1] === v || m[1].indexOf('__') === 0) return;
+    try { if(sessionStorage.getItem('carte-maj') === m[1]) return; sessionStorage.setItem('carte-maj', m[1]); } catch(e) {}
+    location.replace(location.pathname + '?v=' + m[1] + location.hash);
+  }).catch(function(){}); })();</script>
+
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carte immo (test)</title>
 <meta name="robots" content="noindex, nofollow">
@@ -1467,8 +1477,11 @@ async function loadPoi(){
     .catch(e => { if(e.name !== 'AbortError') failed.push(...osm.map(k => LAYERS[k].label)); }));
   await Promise.all(jobs);
   if(ctrl !== poiCtrl) return;
-  setStatus(failed.length ? `Serveur saturé, nouvel essai en déplaçant la carte : ${failed.join(', ')}` : ks.map(k => `${LAYERS[k].icon} ${counts[k] || 0}`).join('   '));
-  if(failed.length) poiKey = '';
+  // serveur OpenStreetMap saturé : nouvel essai automatique après 10 s, 30 s puis 60 s
+  loadPoi.essai = failed.length ? (loadPoi.essai || 0) + 1 : 0;
+  const auto = failed.length && loadPoi.essai <= 3;
+  setStatus(failed.length ? `Serveur saturé (${failed.join(', ')}) : ${auto ? 'nouvel essai automatique dans un instant' : 'nouvel essai en déplaçant la carte'}` : ks.map(k => `${LAYERS[k].icon} ${counts[k] || 0}`).join('   '));
+  if(failed.length){ poiKey = ''; if(auto){ clearTimeout(poiTimer); poiTimer = setTimeout(loadPoi, [10, 30, 60][loadPoi.essai - 1] * 1000); } }
 }
 map.on('moveend', () => { clearTimeout(poiTimer); poiTimer = setTimeout(loadPoi, 450); });
 map.on('zoomend', updateLayerMenu);

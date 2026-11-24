@@ -44,6 +44,8 @@ jobs:
           done
       - if: steps.enr.outputs.publier == '1'
         uses: actions/configure-pages@v5
+      - name: Numéro de version des pages (rechargement automatique chez le visiteur)
+        run: sed -i "s/__VERSION__/${GITHUB_SHA::12}-${GITHUB_RUN_ID}/" site/index.html site/beta.html site/transports.html
       - if: steps.enr.outputs.publier == '1'
         uses: actions/upload-pages-artifact@v3
         with: {path: site}
