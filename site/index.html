@@ -905,8 +905,10 @@ function vis(ids, on){ [].concat(ids).forEach(id => { VIS[id] = on; if(mapReady 
 
 /* ---------- Couches d'intérêt ---------- */
 const LAYERS = {
-  transports:{label:'Transports',        icon:'🚌', color:'#f4a100', minZoom:0, on:false, tile:true,
-              desc:'Toutes les lignes de train, métro, tram et bus avec leurs arrêts'},
+  transports:{label:'Transports',        icon:'🚆', color:'#f4a100', minZoom:0, on:false, tile:true,
+              desc:'Lignes de train, RER, métro et tram avec leurs gares et stations'},
+  bus:       {label:'Bus',               icon:'🚌', color:'#e09a1a', minZoom:0, on:false, sub:true, tile:true,
+              desc:'Lignes de bus (vue de quartier) et arrêts (vue de rue)'},
   futur:     {label:'Stations et lignes futures', icon:'🚧', color:'#8e44ad', minZoom:11, on:false, sub:true,
               desc:'En travaux ou en projet (ex. Grand Paris Express)'},
   velo:      {label:'Pistes cyclables', icon:'🚲', color:'#1c7ed6', minZoom:0, on:false, tile:true,
@@ -934,6 +936,7 @@ function flushPoi(){
   });
 }
 store.get('couches', []).forEach(k => { if(LAYERS[k]) LAYERS[k].on = true; });
+if(!store.get('busChoisi', false)){ LAYERS.bus.on = LAYERS.transports.on; store.set('busChoisi', true); if(LAYERS.bus.on) store.set('couches', [...store.get('couches', []), 'bus']); }   // avant le 24/11, les bus faisaient partie des transports
 const saveLayers = () => store.set('couches', Object.keys(LAYERS).filter(k => LAYERS[k].on));
 const LAYERS_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="m2 13 10 5 10-5"/><path d="m2 17.5 10 5 10-5" opacity=".55"/></svg>';
 
@@ -943,8 +946,9 @@ function setBase(k){
   document.querySelectorAll('[name=base]').forEach(r => r.checked = r.value === k);
 }
 function syncPt(){
-  vis(['tc-bus', 'tc-rail-casing', 'tc-rail', 'tc-arrets', 'tc-gares', 'tc-gares-label'], LAYERS.transports.on);
-  if(LAYERS.transports.on && typeof loadTcViewport === 'function') loadTcViewport();
+  vis(['tc-rail-casing', 'tc-rail', 'tc-gares', 'tc-gares-label'], LAYERS.transports.on);
+  vis(['tc-bus', 'tc-arrets'], LAYERS.bus.on);
+  if((LAYERS.transports.on || LAYERS.bus.on) && typeof loadTcViewport === 'function') loadTcViewport();
   vis('velo', LAYERS.velo.on);
 }
 
@@ -1035,7 +1039,7 @@ map.on('click', () => setLayersOpen(false));
 map.on('dragstart', () => setLayersOpen(false));
 document.querySelectorAll('[data-layer]').forEach(cb => cb.onchange = () => {
   const k = cb.dataset.layer; LAYERS[k].on = cb.checked;
-  if(k === 'transports' || k === 'velo') syncPt();
+  if(k === 'transports' || k === 'bus' || k === 'velo') syncPt();
   if(cb.checked && zL() < LAYERS[k].minZoom){ map.easeTo({zoom:LAYERS[k].minZoom - 1}); toast(`Carte rapprochée pour afficher : ${LAYERS[k].label.toLowerCase()}`); }
   poiKey = ''; loadPoi(); saveLayers();
 });
@@ -1194,10 +1198,10 @@ function setupLayers(){
   // transports IDFM (sous les annonces)
   src('tc-bus'); src('tc-rail'); src('tc-gares'); src('tc-arrets');
   const TCV = LAYERS.transports.on;
-  lay({id:'tc-bus', type:'line', source:'tc-bus', minzoom:12, layout:{'line-cap':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':['get', 'c'], 'line-width':['interpolate', ['linear'], ['zoom'], 12, 1, 16, 2.5], 'line-opacity':.7}});
+  lay({id:'tc-bus', type:'line', source:'tc-bus', minzoom:12, layout:{'line-cap':'round', visibility:LAYERS.bus.on ? 'visible' : 'none'}, paint:{'line-color':['get', 'c'], 'line-width':['interpolate', ['linear'], ['zoom'], 12, 1, 16, 2.5], 'line-opacity':.7}});
   lay({id:'tc-rail-casing', type:'line', source:'tc-rail', layout:{'line-cap':'round', 'line-join':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':'#ffffff', 'line-opacity':.75, 'line-width':['interpolate', ['linear'], ['zoom'], 8, ['+', ['get', 'w'], 1], 14, ['+', ['*', ['get', 'w'], 1.8], 2]]}});
   lay({id:'tc-rail', type:'line', source:'tc-rail', layout:{'line-cap':'round', 'line-join':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':['get', 'c'], 'line-width':['interpolate', ['linear'], ['zoom'], 8, ['*', ['get', 'w'], .6], 14, ['*', ['get', 'w'], 1.8]]}});
-  lay({id:'tc-arrets', type:'circle', source:'tc-arrets', minzoom:14, layout:{visibility:TCV ? 'visible' : 'none'}, paint:{'circle-radius':3, 'circle-color':'#fff', 'circle-stroke-color':'#e09a1a', 'circle-stroke-width':1.5}});
+  lay({id:'tc-arrets', type:'circle', source:'tc-arrets', minzoom:14, layout:{visibility:LAYERS.bus.on ? 'visible' : 'none'}, paint:{'circle-radius':3, 'circle-color':'#fff', 'circle-stroke-color':'#e09a1a', 'circle-stroke-width':1.5}});
   lay({id:'tc-gares', type:'circle', source:'tc-gares', minzoom:10, layout:{visibility:TCV ? 'visible' : 'none'}, paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 10, 2.5, 15, 6], 'circle-color':'#fff', 'circle-stroke-color':'#1b2330', 'circle-stroke-width':['interpolate', ['linear'], ['zoom'], 10, 1.2, 15, 2]}});
   lay({id:'tc-gares-label', type:'symbol', source:'tc-gares', minzoom:13, layout:{'text-field':['get', 'n'], 'text-font':BOLD, 'text-size':11.5, 'text-offset':[0, 1.1], 'text-anchor':'top', 'text-optional':true, visibility:TCV ? 'visible' : 'none'},
        paint:{'text-color':'#1b2330', 'text-halo-color':'#ffffff', 'text-halo-width':1.5}});
@@ -1330,8 +1334,8 @@ const tcGrow = b => { const dx = (b.getEast() - b.getWest()) * .4, dy = (b.getNo
 const tcIn = (b, L) => L && b.getWest() >= L[0] && b.getSouth() >= L[1] && b.getEast() <= L[2] && b.getNorth() <= L[3];
 const tcPoly = ([w, s, e, n]) => `POLYGON((${[[w,s],[e,s],[e,n],[w,n],[w,s]].map(p => p.join(' ')).join(',')}))`;
 async function loadTcViewport(){
-  if(!LAYERS.transports.on) return;
-  loadTcNetwork();
+  if(LAYERS.transports.on) loadTcNetwork();
+  if(!LAYERS.bus.on) return;
   const z = map.getZoom(), vb = map.getBounds();
   if(z < 12 || (tcIn(vb, tcBusBox) && (z < 14 || tcIn(vb, tcStopBox)))) return;
   if(tcCtl) tcCtl.abort(); const ctl = tcCtl = new AbortController(), box = tcGrow(vb);
@@ -1607,7 +1611,7 @@ function hideToast(){ $('#toast').classList.remove('show'); }
 let zones = [], addMode = false, zoneSeq = 0;
 const speed = m => MODES[m].kmh * (m === 'walk' ? 1 : 0.8);                 // km/h, 0,8 = détours et attentes
 const estMin = (km, m) => Math.max(1, Math.round(km / speed(m) * 60));
-function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts, cities, off, src}) => ({id, name, color, kind, origins:origins.map(({lat, lng, name}) => ({lat, lng, name})), opts, cities, off, src}))); }
+function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts, cities, off, src, srcV}) => ({id, name, color, kind, origins:origins.map(({lat, lng, name}) => ({lat, lng, name})), opts, cities, off, src, srcV}))); }
 // villes concernées par un trajet (null = toutes) ; pour un trajet « gares », seuls les départs de ces villes comptent
 const zoneCities = z => z.cities && z.cities.length ? z.cities : null;
 function usedOrigins(z){
@@ -1932,7 +1936,7 @@ function splitByCity(z){
   const i = zones.indexOf(z); zones.splice(i, 1);
   codes.forEach(code => {
     const c = cities.find(x => x.code === code); if(!c) return;
-    addZone(0, 0, 'Trajet ' + c.name, JSON.parse(JSON.stringify(z.opts[0])), {kind:'stations', origins:JSON.parse(JSON.stringify(z.origins)), cities:[code], opts:JSON.parse(JSON.stringify(z.opts))});
+    addZone(0, 0, 'Trajet ' + c.name, JSON.parse(JSON.stringify(z.opts[0])), {kind:'stations', origins:JSON.parse(JSON.stringify(z.origins)), cities:[code], opts:JSON.parse(JSON.stringify(z.opts)), src:(z.src || []).slice(), srcV:z.srcV});
   });
   toast('Un trajet par ville : réglez chacun comme vous voulez');
 }
@@ -1950,7 +1954,7 @@ $('#matchMode').onchange = e => { F.match = e.target.value; renderListings(); };
 /* « Gares de mes villes » : toutes les gares des villes choisies (et de leurs communes limitrophes si cochées) */
 async function topUpStations(){
   const zs = zones.filter(z => z.kind === 'stations'); if(!zs.length || !activeCommunes.length) return;
-  zs.forEach(z => { if(!z.src) z.src = activeCommunes.filter(c => z.origins.some(o => inGeom(o.lng, o.lat, c.geom))).map(c => c.code); });
+  zs.forEach(z => { if(z.srcV !== 2){ z.src = []; z.srcV = 2; } });   // v2 (24/11) : arrêts de tram et toutes les stations de métro / RER relus
   const miss = activeCommunes.filter(c => zs.some(z => !z.src.includes(c.code)));
   if(!miss.length) return;
   const res = await Promise.all(miss.map(c => stationsOf(c.code).catch(() => null)));
@@ -1987,7 +1991,7 @@ $('#allStations').onclick = async () => {
     const made = [];
     cities.forEach(c => {
       if(zones.some(z => z.kind === 'stations' && zoneCities(z) && zoneCities(z).includes(c.code))) return;   // ville déjà couverte
-      if(origins.some(o => originCities(o).includes(c.code))) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code], src}));
+      if(origins.some(o => originCities(o).includes(c.code))) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code], src, srcV:2}));
     });
     if(made.length) fitTo(made.reduce((b, z) => b.add(zoneBounds(z)), new BB()).pad(.2));
     toast(made.length ? `Un trajet par ville : réglez chacun, ou cochez plusieurs villes dans un trajet pour l'appliquer à toutes${sansGare.length ? ` · centre-ville pour ${sansGare.slice(0, 3).join(', ')}` : ''}` : 'Chaque ville a déjà son trajet');
@@ -2506,7 +2510,7 @@ async function updateCommunes(){
   main.forEach((c, i) => c.geom = geoms[i]);
   show(main);
   if(seq !== communeSeq) return;
-  if(!cities.some(c => c.nb)) maybeAutoRefresh();
+  if(!cities.some(c => c.nb)){ maybeAutoRefresh(); topUpStations(); }
   setStatus(main.every(c => c.geom) ? '' : 'Contours de certaines communes indisponibles');
   // 2) puis les communes limitrophes, ville par ville, dès qu'elles arrivent
   const nb = cities.filter(c => c.nb); if(!nb.length) return;
@@ -2620,14 +2624,14 @@ const dest = $('#dest'), dsug = $('#destSug'); let dt = null, dItems = [], dIdx 
 const stationCache = {};
 async function stationsOf(code){
   if(stationCache[code]) return stationCache[code];
-  const q = `[out:json][timeout:20];area["boundary"="administrative"]["admin_level"="8"]["ref:INSEE"="${code}"]->.a;(nwr["railway"~"^(station|halt)$"](area.a);nwr["public_transport"="station"](area.a););out center tags 1500;`;
+  const q = `[out:json][timeout:20];area["boundary"="administrative"]["admin_level"="8"]["ref:INSEE"="${code}"]->.a;(nwr["railway"~"^(station|halt|tram_stop)$"](area.a);nwr["public_transport"="station"](area.a););out center tags 2500;`;
   const j = await overpass(q);
   const seen = new Set(), out = [];
   j.elements.forEach(e => {
     const t = e.tags || {}, c = center(e); if(!t.name || !c || isFuture(t)) return;
     const metro = t.station === 'subway' || t.subway === 'yes';
-    const tram = (t.station === 'light_rail' || t.tram === 'yes' || t.light_rail === 'yes') && t.train !== 'yes';
-    const train = t.train === 'yes' || ((t.railway === 'station' || t.railway === 'halt') && !metro && !tram && !t.station);
+    const tram = (t.railway === 'tram_stop' || t.station === 'light_rail' || t.station === 'tram' || t.tram === 'yes' || t.light_rail === 'yes') && t.train !== 'yes' && !metro;
+    const train = t.train === 'yes' || t.station === 'train' || ((t.railway === 'station' || t.railway === 'halt') && !metro && !tram && !t.station);
     if(!train && !metro && !tram) return;                      // gares routières, etc.
     const type = train ? 'Gare' : metro ? 'Métro' : 'Tram';
     const key = type + norm(t.name); if(seen.has(key)) return; seen.add(key);
