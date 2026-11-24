@@ -103,9 +103,20 @@ def texte(t):
 
 def a_construire(titre, desc=""):
     """Offres « terrain + maison à construire » des constructeurs : ce ne sont pas des maisons existantes."""
-    t = (str(titre or "") + " " + str(desc or "")[:300]).lower()
+    t = (str(titre or "") + " " + str(desc or "")).lower()
     return bool(re.search(r"(?:&agrave;|à|a) construire|projet de (?:construction|maison)|terrain \+ maison|maison \+ terrain"
                           r"|contrat de construction|\bccmi\b", t))
+
+
+NEUF_RX = re.compile(
+    r"\bvefa\b|vente en l'[ée]tat futur|programmes? (?:immobiliers? )?neufs?|r[ée]sidences? neuves?|logements? neufs?"
+    r"|(?<!quasi )(?<!quasiment )(?<!presque )maisons? neuves?|construction neuve|\bsur plans?\b|en cours de construction"
+    r"|livraison (?:pr[ée]vue|estim[ée]e|pr[ée]visionnelle)|frais de notaire r[ée]duits|tva r[ée]duite", re.I)
+
+
+def neuf(titre, desc=""):
+    """Logements neufs, VEFA, programmes : écartés d'office (choix d'Oré du 24/11), comme les projets de construction."""
+    return bool(NEUF_RX.search(str(titre or "") + " " + str(desc or ""))) or a_construire(titre, desc)
 
 
 def viager(titre, desc=""):

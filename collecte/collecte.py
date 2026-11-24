@@ -438,10 +438,12 @@ def main():
             log(f"{len(communes) - len(toutes)} commune(s) seront complétées à la prochaine collecte")
 
     # plafond de prix, rattachement aux communes, localisation vérifiée, enrichissement
-    gardees, ecartees = [], []
+    gardees, ecartees, neufs = [], [], 0
     for a in brutes:
-        if a["prix"] > sources.PRIX_MAX or sources.viager(a.get("titre"), a.get("desc")) \
-                or sources.a_construire(a.get("titre"), a.get("desc")):
+        if a["prix"] > sources.PRIX_MAX or sources.viager(a.get("titre"), a.get("desc")):
+            continue
+        if a.get("neuf") or sources.neuf(a.get("titre"), a.get("desc")):
+            neufs += 1                                 # neuf, VEFA ou projet de construction : écarté d'office
             continue
         c = rattacher(a, communes)
         if not c:
@@ -488,6 +490,8 @@ def main():
             "photos": photos[:25], "days": jours, "neuf": any(x.get("neuf") for x in g),
             "pro": pick("pro"), "tf": pick("tf"), "hist": h[-10:],
         })
+    if neufs:
+        log(f"{neufs} annonce(s) de logement neuf ou de projet de construction écartée(s)")
     if ecartees:
         log(f"{len(ecartees)} annonce(s) écartée(s) car le bien est en réalité hors de vos communes")
     log(f"{len(sortie)} maison(s) après regroupement des doublons ({len(gardees)} annonces lues)")
