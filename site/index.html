@@ -130,8 +130,19 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
   .spin{width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .dest-row{display:flex;gap:8px;margin-bottom:10px}
-  .opt+.opt{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
-  .opt-h{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px}
+  .opt{background:var(--bg);border-radius:10px;padding:8px 10px 6px;border:1px solid var(--line)}
+  .opt-h{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;gap:6px}
+  .opt-h .sum{font-weight:600;color:var(--muted);font-size:11.5px;margin-left:auto}
+  .opt .leg{border-top:0;margin-top:0;padding-top:0;position:relative}
+  .opt .leg+.leg{margin-top:6px;padding-top:16px}
+  .opt .leg+.leg::before{content:"+";position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:var(--c);color:#fff;font-weight:700;font-size:14px;line-height:20px;text-align:center}
+  .or-sep{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+  .or-sep::before,.or-sep::after{content:"";flex:1;border-top:1px solid var(--line)}
+  .trip-cities{margin:0 0 10px;font-size:12.5px;color:var(--muted)}
+  .trip-cities .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .trip-cities label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 8px;background:#fff;color:var(--text);cursor:pointer;font-size:12.5px}
+  .trip-cities label.off{color:var(--faint);background:var(--bg);text-decoration:line-through}
+  .trip-cities input{accent-color:var(--accent);margin:0}
   .link.addl{display:block;margin-top:8px;font-size:12.5px;text-align:left}
   .dest-row .dest{flex:1;margin:0}
   .btn-gares{height:40px;border-radius:10px;white-space:nowrap}
@@ -535,6 +546,7 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
           </div>
           <button class="btn btn-gares" id="allStations" title="Toutes les gares des villes choisies en haut de page" disabled>🚉 Gares de mes villes</button>
         </div>
+        <div class="trip-cities" id="tripCities" hidden>Appliquer le critère de trajet à :<div class="chips"></div></div>
         <div id="zones"></div>
         <div class="match" id="matchBox">Afficher les maisons situées
           <select id="matchMode" aria-label="Règle des trajets"><option value="any">près d'au moins une destination</option><option value="all">près de toutes les destinations</option></select>
@@ -1402,21 +1414,21 @@ function renderZoneList(){
         <button class="zone-name" data-focus title="Centrer la carte sur ce périmètre">${z.kind === 'stations' ? '🚉' : '📍'} ${esc(z.name)}</button>
         <button class="icon-btn" data-del aria-label="Supprimer ${esc(z.name)}">×</button>
       </div>
-      ${z.opts.map((legs, oi) => `<div class="opt" data-opt="${oi}">
-        ${z.opts.length > 1 ? `<div class="opt-h"><span>${oi === 0 ? 'Possibilité 1' : 'ou possibilité ' + (oi + 1)}</span><button class="icon-btn" data-rmopt aria-label="Retirer cette possibilité">×</button></div>` : ''}
+      ${z.opts.map((legs, oi) => `${oi ? '<div class="or-sep">OU</div>' : ''}<div class="opt" data-opt="${oi}">
+        ${z.opts.length > 1 || legs.length > 1 ? `<div class="opt-h"><span>${z.opts.length > 1 ? 'Trajet ' + (oi + 1) : 'Trajet'}</span><span class="sum">${legs.length > 1 ? legs.map(g => MODES[g.mode].icon + ' ' + g.min).join(' + ') + ' = ' + legs.reduce((t, g) => t + g.min, 0) + ' min au total' : ''}</span>${z.opts.length > 1 ? '<button class="icon-btn" data-rmopt aria-label="Retirer ce trajet">×</button>' : ''}</div>` : ''}
         ${legs.map((g, i) => `
         <div class="leg" data-leg="${i}">
-          ${legs.length > 1 ? `<div class="leg-h"><span>${i === 0 ? 'Étape 1' : 'puis étape ' + (i + 1)}</span><button class="icon-btn" data-rmleg aria-label="Retirer l'étape">×</button></div>` : ''}
+          ${legs.length > 1 ? `<div class="leg-h"><span>Étape ${i + 1}</span><button class="icon-btn" data-rmleg aria-label="Retirer l'étape">×</button></div>` : ''}
           <div class="seg" role="radiogroup" aria-label="Mode de trajet">${Object.entries(MODES).map(([k, m]) =>
             `<button role="radio" aria-checked="${g.mode === k}" data-mode="${k}" class="${g.mode === k ? 'on' : ''}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
           <div class="time"><input type="range" min="5" max="60" step="5" value="${g.min}" data-time aria-label="Durée de l'étape"><output>${g.min} min</output></div>
         </div>`).join('')}
-        ${legs.length < 3 ? '<button class="link addl" data-addleg>+ puis une autre étape (ex. 5 min à pied puis 10 min de transports)</button>' : ''}
+        ${legs.length < 3 ? '<button class="link addl" data-addleg>+ ajouter une étape à ce trajet (ex. 5 min à pied + 10 min de transports)</button>' : ''}
       </div>`).join('')}
-      ${z.opts.length < 3 ? '<button class="link addl" data-addopt>+ ou une autre façon d\'y aller (ex. 10 min à vélo ou 5 min de transports)</button>' : ''}
+      ${z.opts.length < 3 ? '<button class="link addl" data-addopt>+ ou un autre trajet possible (ex. 10 min à vélo OU 5 min de transports)</button>' : ''}
       <div class="zstatus"></div>
     </div>`).join('');
-  zones.forEach(renderZoneStatus);
+  zones.forEach(renderZoneStatus); renderTripCities();
   $('#matchBox').style.display = zones.length > 1 ? '' : 'none';
 }
 $('#zones').addEventListener('click', e => {
@@ -1438,6 +1450,8 @@ $('#zones').addEventListener('input', e => {
   if(!e.target.hasAttribute('data-time')) return;
   const z = zones.find(x => x.id == e.target.closest('.zone').dataset.id), leg = z.opts[+e.target.closest('.opt').dataset.opt][+e.target.closest('.leg').dataset.leg];
   leg.min = +e.target.value; e.target.nextElementSibling.textContent = leg.min + ' min';
+  const legs = z.opts[+e.target.closest('.opt').dataset.opt], sum = e.target.closest('.opt').querySelector('.sum');
+  if(sum && legs.length > 1) sum.textContent = legs.map(g => MODES[g.mode].icon + ' ' + g.min).join(' + ') + ' = ' + legs.reduce((t, g) => t + g.min, 0) + ' min au total';
   saveZones(); scheduleCompute(z);
 });
 $('#matchMode').value = F.match;
@@ -1522,8 +1536,25 @@ function passCriteria(l){
   return (F.pmax == null || l.price <= F.pmax) && ok(l.chambres, F.beds) && (F.smin == null || ok(l.surf, F.smin))
       && (F.tmin == null || ok(l.terrain, F.tmin)) && ok(l.pieces, F.rooms) && (!l.dpe || DPE.indexOf(l.dpe) <= DPE.indexOf(F.dpe)) && l.days <= F.age;
 }
+let tripOff = store.get('tripOff', []);              // villes où le critère de trajet ne s'applique pas
+function cityGroup(l){                                // ville choisie à laquelle appartient l'annonce (elle-même ou une de ses voisines)
+  const c = activeCommunes.find(c => c.code === l.insee) || activeCommunes.find(c => inGeom(l.lng, l.lat, c.geom));
+  return c ? (c.main ? c.code : c.parent) : null;
+}
+function renderTripCities(){
+  const box = $('#tripCities'); box.hidden = !zones.length || !cities.length;
+  if(box.hidden) return;
+  box.querySelector('.chips').innerHTML = cities.map(c => { const on = !tripOff.includes(c.code);
+    return `<label class="${on ? '' : 'off'}" title="${on ? 'Le trajet est exigé pour' : 'Pas de critère de trajet pour'} ${esc(c.name)}${c.nb ? ' et ses voisines' : ''}"><input type="checkbox" data-code="${c.code}" ${on ? 'checked' : ''}>${esc(c.name)}${c.nb ? ' <small>+ voisines</small>' : ''}</label>`; }).join('');
+}
+$('#tripCities').addEventListener('change', e => {
+  const code = e.target.dataset.code; if(!code) return;
+  tripOff = e.target.checked ? tripOff.filter(x => x !== code) : [...tripOff, code];
+  store.set('tripOff', tripOff); renderTripCities(); renderListings();
+});
 function inArea(l){
   if(!zones.length) return true;
+  if(tripOff.length && tripOff.includes(cityGroup(l))) return true;
   const n = zoneHits(l).length;
   return F.match === 'all' ? n === zones.length : n > 0;
 }
@@ -1956,7 +1987,7 @@ async function updateCommunes(){
     let ns = [];
     try { ns = await fetchNeighbors(c.code); } catch(_) {}
     if(!ns.length){ fails.push(c.name); return; }
-    const add = ns.filter(n => !list.some(x => x.code === n.code)).map(n => ({...n, main:false}));
+    const add = ns.filter(n => !list.some(x => x.code === n.code)).map(n => ({...n, main:false, parent:c.code}));
     add.forEach(n => list.push(n));
     const gs = await Promise.all(add.map(n => fetchContour(n.code).catch(() => null)));
     add.forEach((n, i) => n.geom = gs[i]);
@@ -1974,6 +2005,7 @@ function drawCommunes(){
   $('#allStations').disabled = !cities.length;
 }
 function renderCityChips(){
+  if(typeof renderTripCities === 'function') renderTripCities();
   $('#cityChips').innerHTML = cities.map(c => `<span class="cchip">${esc(c.name)}<button class="nbt${c.nb ? ' on' : ''}" data-nb="${c.code}" aria-pressed="${!!c.nb}" title="Inclure les communes limitrophes de ${esc(c.name)}"><span class="fl">+ limitrophes</span><span class="ab">+ voisines</span></button><button data-rm="${c.code}" aria-label="Retirer ${esc(c.name)}">×</button></span>`).join('');
   $('#allStations').disabled = !cities.length;
   $('#q').placeholder = cities.length ? 'Ajouter une ville…' : 'Villes recherchées (plusieurs possibles)…';
