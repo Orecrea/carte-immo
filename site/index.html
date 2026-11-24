@@ -2789,7 +2789,14 @@ async function loadPartial(){
       headers:{Authorization:'Bearer ' + jeton, Accept:'application/vnd.github.raw', 'X-GitHub-Api-Version':'2022-11-28'}});
     if(!r.ok) return false;
     const d = await decryptJSON(await r.text(), KEY);
-    if(!d.partiel || new Date(d.partiel.debut) < new Date(store.get('pending', 0) - 120e3)) return false;   // ancienne collecte
+    if(!d.partiel) return false;
+    const debut = new Date(d.partiel.debut).getTime();
+    if(Date.now() - store.get('pending', 0) > pendingWindow()){   // collecte lancée ailleurs (horaire, autre appareil) : on la suit aussi
+      if(Date.now() - debut > 45 * 60e3) return false;
+      if(DATA && !DATA.partiel && new Date(DATA.maj) >= debut - 60e3) return false;
+      store.set('pending', debut); store.set('pendingN', d.partiel.total); startPolling();
+    }
+    if(debut < store.get('pending', 0) - 120e3) return false;                                       // ancienne collecte
     if(DATA && !DATA.partiel && new Date(DATA.maj) >= new Date(d.partiel.debut) - 60e3) return false;           // résultat final déjà là
     if(DATA && DATA.maj === d.maj) return false;
     applyData(d); return true;
@@ -2880,7 +2887,7 @@ async function sendRequest(){          // demande de collecte déposée directem
     const sha = g.ok ? (await g.json()).sha : null;
     const p = await ghPut('perso/demande.enc', await encryptJSON(requestPayload(), KEY), sha, 'Actualiser les annonces');
     if(!p.ok) return false;
-    store.set('pending', Date.now()); store.set('pendingN', activeCommunes.length || cities.length); store.set('autoSent', villesKey(cities)); updateSyncNote(); startPolling();
+    store.set('pending', Date.now()); store.set('pendingN', activeCommunes.length || cities.length); store.set('autoSent', villesKey(cities)); store.set('autoSentAt', Date.now()); updateSyncNote(); startPolling();
     return true;
   } catch(_) { return false; }
 }
@@ -2889,7 +2896,8 @@ function maybeAutoRefresh(){             // villes ajoutées, retirées ou « + 
   clearTimeout(autoTimer);
   if(!jeton || !DATA || !cities.length) return;
   const k = villesKey(cities);
-  if(k === villesKey(DATA.villes) || k === store.get('autoSent', '')) return;
+  if(k === villesKey(DATA.villes)) return;
+  if(k === store.get('autoSent', '') && Date.now() - store.get('autoSentAt', 0) < 2 * pendingWindow()) return;   // déjà demandée récemment
   autoTimer = setTimeout(async () => { if(villesKey(cities) === k && await sendRequest()) toast(`Villes modifiées : collecte lancée, environ ${collecteMin()} min`); }, 8000);
   updateSyncNote();
 }
@@ -2922,6 +2930,18 @@ function startPolling(){
   }, 30e3);
 }
 function resumePolling(){ if(Date.now() - store.get('pending', 0) < pendingWindow()) startPolling(); }
+// toutes les 2 min : une collecte vient-elle de démarrer (horaire, autre appareil, demande) ? si oui, barre de progression
+async function guetCollecte(){
+  if(!jeton || !KEY || document.hidden || Date.now() - store.get('pending', 0) < pendingWindow()) return;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/commits?path=perso/partiel.enc&per_page=1&t=${Date.now()}`, {cache:'no-store',
+      headers:{Authorization:'Bearer ' + jeton, 'X-GitHub-Api-Version':'2022-11-28'}});
+    if(!r.ok) return;
+    const c = (await r.json())[0], t = c && new Date(c.commit.committer.date).getTime();
+    if(t && Date.now() - t < 4 * 60e3 && await loadPartial()) updateSyncNote();
+  } catch(_) {}
+}
+setInterval(guetCollecte, 120e3); setTimeout(guetCollecte, 5e3);
 
 /* =========================================================
    Nouveautés depuis la dernière visite
