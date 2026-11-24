@@ -488,13 +488,23 @@ def main():
             faites = set(sources.ATTEINTES.get(nom, set()))
             brutes_p += [a for a in cache.get("annonces", []) if a.get("insee") in codes and a.get("insee") not in faites]
             brutes_p += list(sources.PARTIEL.get(nom, []))
-        return brutes_p
+        return [copie(a) for a in brutes_p]
+
+    def copie(a):                                      # une annonce peut être en train d'être complétée par une source
+        for _ in range(20):
+            try:
+                return copy.deepcopy(a)
+            except RuntimeError:
+                time.sleep(0.02)
+        return copy.deepcopy(dict(a))
 
     def publier_partiel():
         _tl.muet = True
-        while not fini.wait(float(os.environ.get("PARTIEL_S", 75))):
+        attente = 30                                   # premier aperçu vite, puis toutes les ~75 s
+        while not fini.wait(attente):
+            attente = float(os.environ.get("PARTIEL_S", 75))
             try:
-                sortie_p = construire(copy.deepcopy(instantane()), communes, copy.deepcopy(etat))
+                sortie_p = construire(instantane(), communes, copy.deepcopy(etat))
                 faites = set.intersection(*sources.ATTEINTES.values()) if sources.ATTEINTES else set()
                 d = {"maj": datetime.now(timezone.utc).isoformat(timespec="seconds"), "fin": fin.isoformat(timespec="minutes"),
                      "villes": etat.get("villes", []), "communes": [c["code"] for c in communes], "sources": {}, "journal": [],
@@ -509,8 +519,9 @@ def main():
                     if subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=RACINE, capture_output=True).returncode == 0:
                         break
                     subprocess.run(g + ["pull", "-q", "--rebase", "origin", "main"], cwd=RACINE, capture_output=True)
-            except Exception:
-                pass                                   # un instantané raté n'empêche jamais la collecte
+            except Exception as e:                     # un instantané raté n'empêche jamais la collecte : on réessaie vite
+                print(f"(aperçu en cours de collecte non publié : {type(e).__name__} {e})", file=sys.stderr)
+                attente = 5
 
     if os.environ.get("PARTIEL") == "1" and communes:
         threading.Thread(target=publier_partiel, daemon=True).start()
