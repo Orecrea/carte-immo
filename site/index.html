@@ -312,7 +312,9 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
   .fact small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600}
   .fact b{font-size:16px}
   .dpe{display:inline-block;width:26px;text-align:center;color:#fff;border-radius:5px;font-weight:700}
-  .m-desc{color:#3a4152;margin:0 0 18px;white-space:pre-line;max-height:16em;overflow:auto}
+  .m-desc{color:#3a4152;margin:0;white-space:pre-line;height:16em;min-height:6em;overflow:auto;resize:vertical;padding-right:6px}
+  .m-desc.full{height:auto;resize:none}
+  .m-desc-more{margin:6px 0 18px;font-size:13px;font-weight:600}
   .hist{margin-top:8px;font-size:12.5px;color:#0f766e;background:#e8f6f3;border-radius:8px;padding:6px 9px;line-height:1.4}
   .approx{font-size:12px;color:var(--faint)}
   .tag.drop{background:#0f766e;color:#fff}
@@ -472,7 +474,8 @@ window.L || document.write('<link rel="stylesheet" href="https://unpkg.com/leafl
     .m-price{font-size:26px}
     .m-title{font-size:17px}
     .facts{grid-template-columns:repeat(2,1fr);margin:14px 0}
-    .m-desc{max-height:none}
+    .m-desc{height:auto;resize:none}
+    .m-desc-more{display:none}
     .m-actions{position:sticky;bottom:0;background:#fff;margin:16px -16px 0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -4px 12px rgba(16,24,40,.08)}
     .m-actions a,.m-actions button{min-width:0;flex:1 1 100%;padding:12px}
     .m-actions .ghost#centerOn{display:none}
@@ -1068,7 +1071,7 @@ function loadNearby(l){
   const q = `[out:json][timeout:20];(node["highway"="bus_stop"]${a(600)};node["railway"~"^(station|halt|tram_stop)$"]${a(2000)};`
           + `nwr["shop"~"^(supermarket|convenience|bakery)$"]${a(2000)};nwr["amenity"="pharmacy"]${a(2000)};`
           + `way["leisure"="park"]${a(1500)};nwr["leisure"~"^(sports_centre|swimming_pool|playground)$"]${a(1500)};);out center 400;`;
-  const ORDER = ['Arrêt de bus','Gare','Métro','Tram','École maternelle','École primaire','Collège','Lycée','Boulangerie','Supérette','Supermarché','Pharmacie','Parc','Aire de jeux','Centre sportif','Piscine'];
+  const ORDER = ['Arrêt de bus','Gare','Métro','Tram','École maternelle','École primaire','Collège','Lycée général','Lycée pro','Boulangerie','Supérette','Supermarché','Pharmacie','Parc','Aire de jeux','Centre sportif','Piscine'];
   const fmtD = d => d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km';
   const fmtT = d => d <= 2500 ? `${Math.max(1, Math.round(d / 80))} min à pied` : `${Math.round(d * 1.3 / 1000 / 25 * 60)} min en voiture environ`;
   const row = x => `<li>${x.info.icon === '●' ? `<span style="color:${x.info.color}">●</span>` : x.info.icon} ${x.info.type}${x.name ? ' ' + esc(x.name) : ''} — ${fmtD(x.d)} (${fmtT(x.d)})</li>`;
@@ -1082,18 +1085,25 @@ function loadNearby(l){
                                : pending ? '<li style="color:var(--muted)">Recherche des écoles, commerces et transports…</li>' : '<li>Aucun équipement trouvé à proximité</li>';
   };
   // écoles : l'établissement le plus proche de chaque niveau, toujours (annuaire de l'Éducation nationale)
-  const ED = 'https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-annuaire-education/records?select=nom_etablissement,type_etablissement,libelle_nature,statut_public_prive,position';
+  const ED = 'https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-annuaire-education/records?select=nom_etablissement,type_etablissement,libelle_nature,statut_public_prive,position,voie_generale,voie_professionnelle';
   const edQuery = (type, km, n) => fetch(`${ED}&limit=${n}&where=${encodeURIComponent(`within_distance(position, geom'POINT(${l.lng} ${l.lat})', ${km}km) and type_etablissement="${type}"`)}`).then(r => r.json()).then(j => j.results || []);
-  const niveaux = [['Ecole', 2, 100], ['Collège', 6, 50], ['Lycée', 10, 50]];
-  Promise.all(niveaux.map(async ([type, km, n]) => { let r = await edQuery(type, km, n); if(!r.length) r = await edQuery(type, 25, n); return r; }))
+  const niveaux = [['Ecole', 2, 100], ['Collège', 6, 50], ['Lycée', 10, 100]];
+  const general = r => r.voie_generale === '1' || /GENERAL|POLYVALENT/i.test(r.libelle_nature || '');
+  Promise.all(niveaux.map(async ([type, km, n]) => {
+    let r = await edQuery(type, km, n);
+    if(!r.length || (type === 'Lycée' && !r.some(general))) r = await edQuery(type, 25, n);   // lycée général parfois plus loin
+    return r; }))
     .then(lists => {
       lists.flat().forEach(r => {
         if(!r.position) return;
         const t = {amenity:'school', name:r.nom_etablissement, nature:r.libelle_nature || r.type_etablissement, prive:r.statut_public_prive === 'Privé'};
-        let info = poiInfo('ecoles', t); const base = info.type.replace(' (privé)', '');
+        let info = poiInfo('ecoles', t); let base = info.type.replace(' (privé)', '');
+        if(base === 'Lycée'){ base = general(r) ? 'Lycée général' : 'Lycée pro'; info = {...info, type:info.type.replace('Lycée', base)}; }
         const d = map.distance([l.lat, l.lng], [r.position.lat, r.position.lon]);
         if(!best[base] || d < best[base].d) best[base] = {d, info, name:t.name};
       });
+      // lycée pro : affiché seulement s'il est plus proche que le lycée général
+      if(best['Lycée pro'] && best['Lycée général'] && best['Lycée pro'].d >= best['Lycée général'].d) delete best['Lycée pro'];
     }).catch(() => {}).finally(() => { pending--; paint(); });
   overpass(q).then(j => {
     j.elements.forEach(e => {
@@ -1845,7 +1855,7 @@ function openListing(l, list){
         <div class="fact"><small>Construction</small><b>${l.year || '—'}</b></div>
         <div class="fact"><small>DPE / GES</small><b>${l.dpe ? `<span class="dpe" style="background:${DPE_COL[l.dpe]}">${l.dpe}</span>` : '—'} ${l.ges ? `<span class="dpe" style="background:${DPE_COL[l.ges]}">${l.ges}</span>` : ''}</b></div>
       </div>
-      <p class="m-desc">${desc}</p>
+      <p class="m-desc" id="mDesc">${desc}</p><button class="link m-desc-more" id="mDescMore" hidden>Lire toute la description ▾</button>
       <div class="m-cols">
         <div>
           <h3>Atouts repérés</h3><ul>${(l.atouts || []).length ? l.atouts.map(a => `<li>${esc(a)}</li>`).join('') : '<li style="color:var(--muted)">Aucun mot-clé repéré dans l\'annonce</li>'}</ul>
@@ -1878,6 +1888,9 @@ function openListing(l, list){
   car.ontouchstart = e => x0 = e.touches[0].clientX;
   car.ontouchend = e => { if(x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if(Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; };
   loadNearby(l);
+  const md = $('#mDesc'), mm = $('#mDescMore');
+  if(md && mm){ requestAnimationFrame(() => { mm.hidden = md.scrollHeight <= md.clientHeight + 4; });
+    mm.onclick = () => { const f = md.classList.toggle('full'); mm.textContent = f ? 'Réduire la description ▴' : 'Lire toute la description ▾'; if(!f) md.scrollTop = 0; }; }
 }
 function renderNote(){
   const box = $('#noteBox'); if(!box || !current) return;
