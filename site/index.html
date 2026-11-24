@@ -2175,9 +2175,12 @@ function renderList(){
   // liste
   const list = $('#list');
   if(!n){
+    // pourquoi rien ici : maisons collectées dans cette partie de la carte, puis avec les critères, puis dans les trajets
+    const here = LISTINGS.filter(l => inView(l, vb) && inCities(l)), crit = here.filter(l => passCriteria(l) && !isHidden(l) && (!F.unseen || !vus[l.id]));
+    const why = !cities.length ? '' : `<div class="why" style="margin-top:10px;font-size:12.5px;color:var(--muted)">Sur cette partie de la carte : ${here.length} maison${here.length > 1 ? 's' : ''} collectée${here.length > 1 ? 's' : ''}${here.length ? `, ${crit.length} avec vos critères${zones.length && crit.length ? `, 0 dans vos trajets` : ''}` : ' (la collecte de ces villes n\'est peut-être pas encore faite)'}.${F.match === 'all' && zones.length > 1 ? `<br>Règle des trajets : « près de toutes les destinations ». Choisissez « près d'au moins une destination » pour additionner les trajets.` : ''}</div>`;
     list.innerHTML = !cities.length ? `<div class="empty"><div class="big">📍</div><b>Choisissez une ville</b>Tapez une ou plusieurs villes en haut de la page pour voir leurs maisons à vendre.</div>`
-      : total ? `<div class="empty"><div class="big">🗺️</div><b>Aucune maison dans cette partie de la carte</b>${total} maison${total > 1 ? 's' : ''} correspond${total > 1 ? 'ent' : ''} ailleurs.<br><br><button class="btn" id="showAll">Voir toutes les maisons</button></div>`
-      : `<div class="empty"><div class="big">🏡</div><b>Aucune maison ne correspond</b>Allongez le temps de trajet, ajoutez une ville ou assouplissez les critères.<br><br><button class="btn" id="emptyReset">Réinitialiser les critères</button></div>`;
+      : total ? `<div class="empty"><div class="big">🗺️</div><b>Aucune maison dans cette partie de la carte</b>${total} maison${total > 1 ? 's' : ''} correspond${total > 1 ? 'ent' : ''} ailleurs.<br><br><button class="btn" id="showAll">Voir toutes les maisons</button>${why}</div>`
+      : `<div class="empty"><div class="big">🏡</div><b>Aucune maison ne correspond</b>Allongez le temps de trajet, ajoutez une ville ou assouplissez les critères.<br><br><button class="btn" id="emptyReset">Réinitialiser les critères</button>${why}</div>`;
     if($('#showAll')) $('#showAll').onclick = () => fitTo(BB.of(lastInside.map(l => [l.lat, l.lng])).pad(.1));
     if($('#emptyReset')) $('#emptyReset').onclick = () => $('#resetFilters').click();
   } else {
