@@ -1968,7 +1968,7 @@ $('#matchMode').onchange = e => { F.match = e.target.value; renderListings(); };
 /* « Gares de mes villes » : toutes les gares des villes choisies (et de leurs communes limitrophes si cochées) */
 async function topUpStations(){
   const zs = zones.filter(z => z.kind === 'stations'); if(!zs.length || !activeCommunes.length) return;
-  zs.forEach(z => { if(z.srcV !== 2){ z.src = []; z.srcV = 2; } });   // v2 (24/11) : arrêts de tram et toutes les stations de métro / RER relus
+  zs.forEach(z => { if(z.srcV !== 3){ z.src = []; z.srcV = 3; } });   // v3 (24/11) : stations d'Île-de-France relues dans les données IDFM
   const miss = activeCommunes.filter(c => zs.some(z => !z.src.includes(c.code)));
   if(!miss.length) return;
   const res = await Promise.all(miss.map(c => stationsOf(c.code).catch(() => null)));
@@ -1976,6 +1976,7 @@ async function topUpStations(){
   zs.forEach(z => {
     miss.forEach((c, i) => {
       if(z.src.includes(c.code) || !res[i]) return;
+      if(res[i].length){ const n = z.origins.length; z.origins = z.origins.filter(o => !(/^Centre de /.test(o.name || '') && inGeom(o.lng, o.lat, c.geom))); added += n - z.origins.length; }   // gares trouvées : plus besoin du centre-ville
       res[i].forEach(s => { if(!z.origins.some(o => kmDist(o.lat, o.lng, s.lat, s.lng) < .3)){ z.origins.push({lat:s.lat, lng:s.lng, name:s.name}); added++; } });
       z.src.push(c.code);
     });
@@ -2005,7 +2006,7 @@ $('#allStations').onclick = async () => {
     const made = [];
     cities.forEach(c => {
       if(zones.some(z => z.kind === 'stations' && zoneCities(z) && zoneCities(z).includes(c.code))) return;   // ville déjà couverte
-      if(origins.some(o => originCities(o).includes(c.code))) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code], src, srcV:2}));
+      if(origins.some(o => originCities(o).includes(c.code))) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code], src, srcV:3}));
     });
     if(made.length) fitTo(made.reduce((b, z) => b.add(zoneBounds(z)), new BB()).pad(.2));
     toast(made.length ? `Un trajet par ville : réglez chacun, ou cochez plusieurs villes dans un trajet pour l'appliquer à toutes${sansGare.length ? ` · centre-ville pour ${sansGare.slice(0, 3).join(', ')}` : ''}` : 'Chaque ville a déjà son trajet');
@@ -2636,8 +2637,31 @@ function pickCity(f){
    ========================================================= */
 const dest = $('#dest'), dsug = $('#destSug'); let dt = null, dItems = [], dIdx = -1, dSeq = 0;
 const stationCache = {};
+/* Île-de-France : toutes les gares et stations (train, RER, métro, tram) d'après les données officielles IDFM,
+   plus complètes et bien plus fiables que la recherche OpenStreetMap (souvent saturée) */
+let IDF_ST = null;
+function idfStations(){
+  return IDF_ST || (IDF_ST = cached('idfm-stations-v1', async () => (await tcGeo(TC_DS.gares)).features
+    .filter(f => f.geometry && f.geometry.type === 'Point')
+    .map(f => { const p = f.properties || {}, [k] = tcKind(p);
+      return {name:String(tcPick(p, /^(nom_?gares?|nom_?zda|nom_?long|nom|name)$/i) || tcPick(p, /(nom|name)/i) || ''), k, lng:f.geometry.coordinates[0], lat:f.geometry.coordinates[1]}; }))
+    .catch(e => { IDF_ST = null; throw e; }));
+}
+const IDF_DEP = /^(75|77|78|91|92|93|94|95)/;
+async function stationsIdf(code){
+  const g = await fetchContour(code); if(!g) return [];
+  const seen = new Set(), out = [];
+  (await idfStations()).forEach(s => {
+    if(!s.name || s.k === 'tzen' || !inGeom(s.lng, s.lat, g)) return;                 // TZen = bus
+    const type = s.k === 'metro' ? 'Métro' : s.k === 'tram' ? 'Tram' : s.k === 'cable' ? 'Câble' : 'Gare';
+    const key = type + norm(s.name); if(seen.has(key)) return; seen.add(key);
+    out.push({name:s.name, type, rank:type === 'Gare' ? 0 : type === 'Métro' ? 1 : 2, lat:s.lat, lng:s.lng});
+  });
+  return out.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, 'fr'));
+}
 async function stationsOf(code){
   if(stationCache[code]) return stationCache[code];
+  if(IDF_DEP.test(code)){ try { const st = await stationsIdf(code); if(st.length) return stationCache[code] = st; } catch(_) {} }
   const q = `[out:json][timeout:20];area["boundary"="administrative"]["admin_level"="8"]["ref:INSEE"="${code}"]->.a;(nwr["railway"~"^(station|halt|tram_stop)$"](area.a);nwr["public_transport"="station"](area.a););out center tags 2500;`;
   const j = await overpass(q);
   const seen = new Set(), out = [];
