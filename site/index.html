@@ -355,6 +355,9 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
   .btn-acc:disabled{opacity:.6;cursor:default}
   .sync-note{margin-top:10px;font-size:12.5px;background:var(--accent-soft);color:#7a2e14;border-radius:8px;padding:8px 10px;line-height:1.4}
   .sync-note.ok{background:#e8f6f3;color:#0f5f55}
+  .sync-bar{height:6px;border-radius:3px;background:rgba(15,95,85,.15);margin:7px 0 3px;overflow:hidden}
+  .sync-bar i{display:block;height:100%;background:#2a9d8f;border-radius:3px;transition:width 1s linear}
+  .sync-note .btn-auto{display:inline-block;margin-top:6px;font-weight:700}
   #srcBox{margin-top:8px}
   .src-list{margin:6px 0 8px;padding-left:18px;font-size:12.5px;color:var(--muted)}
   .src-list li{margin:2px 0}
@@ -2790,21 +2793,34 @@ function renderOtherLinks(){
   }).join('') : '<p class="other-help">Choisissez d\'abord vos villes en haut de la page.</p>';
 }
 function communeCodes(){ return [...new Set(activeCommunes.map(c => c.code))].sort().join(','); }
+// durée estimée d'une collecte : environ 25 s par commune suivie, plus le démarrage chez GitHub
+const collecteMin = () => Math.round(3 + 0.42 * Math.max(1, (store.get('pendingN', 0) || activeCommunes.length || cities.length)));
+const pendingWindow = () => (collecteMin() + 20) * 60e3;
+let progTimer = null;
 function updateSyncNote(){
   renderOtherLinks();
   const el = $('#syncNote'); if(!el) return;
-  const pending = store.get('pending', 0), recent = Date.now() - pending < 30 * 60e3;
+  const pending = store.get('pending', 0), recent = Date.now() - pending < pendingWindow();
   let msg = '', ok = false;
-  if(recent){ msg = `Collecte demandée à ${new Date(pending).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}. Les annonces arrivent en général en 5 à 15 minutes : la page se met à jour toute seule.`; ok = true; }
+  clearInterval(progTimer);
+  if(recent){
+    const tot = collecteMin(), paint = () => {
+      const pass = (Date.now() - pending) / 60e3, pct = Math.min(96, pass / tot * 100), reste = Math.max(0, Math.ceil(tot - pass));
+      el.hidden = false; el.className = 'sync-note ok';
+      el.innerHTML = `<b>Collecte en cours</b> (lancée à ${new Date(pending).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}, ${store.get('pendingN', 0) || activeCommunes.length} communes)
+        <div class="sync-bar"><i style="width:${pct}%"></i></div>${reste ? `Encore environ ${reste} min` : 'Presque fini, encore quelques instants'} : les annonces s'afficheront toutes seules, vous pouvez continuer à naviguer.`;
+    };
+    paint(); progTimer = setInterval(paint, 15e3); return;
+  }
   else if(!cities.length) msg = 'Choisissez vos villes en haut de la page, puis cliquez sur Actualiser pour récupérer leurs annonces.';
   else if(!DATA) msg = 'Cliquez sur Actualiser pour lancer la première collecte des annonces de vos villes.';
   else if(activeCommunes.length && activeCommunes.some(c => !(DATA.communes || []).includes(c.code))){
-    msg = jeton ? 'Vos villes ont changé : la collecte de leurs annonces se lance toute seule dans quelques secondes.' : 'Vos villes ont changé depuis la dernière collecte : cliquez sur Actualiser pour récupérer leurs annonces.';
+    msg = jeton ? 'Vos villes ont changé : la collecte de leurs annonces se lance toute seule dans quelques secondes.' : 'Vos villes ont changé depuis la dernière collecte : leurs annonces ne sont pas encore là.';
     ok = !!jeton;
   }
   else if(new Date(DATA.fin) < new Date()) msg = 'La collecte automatique est en pause. Cliquez sur Actualiser pour la relancer pendant un mois.';
   el.hidden = !msg; el.textContent = msg; el.classList.toggle('ok', ok);
-  if(msg && !jeton && !recent){ el.insertAdjacentHTML('beforeend', ' <button class="link" id="linkGh">Ne plus passer par GitHub</button>');
+  if(msg && !jeton && !recent){ el.insertAdjacentHTML('beforeend', '<br><button class="link btn-auto" id="linkGh">⚡ Rendre la collecte automatique (2 min, une seule fois)</button> ou cliquez sur Actualiser.');
     $('#linkGh').onclick = () => { showTab('favs'); if(isMobile()) setSheet('full'); const st = $('#cloudSteps'); if(st) st.hidden = false; }; }
 }
 const villesKey = list => (list || []).map(c => c.code + (c.nb ? '+' : '')).sort().join(',');
@@ -2816,7 +2832,7 @@ async function sendRequest(){          // demande de collecte déposée directem
     const sha = g.ok ? (await g.json()).sha : null;
     const p = await ghPut('perso/demande.enc', await encryptJSON(requestPayload(), KEY), sha, 'Actualiser les annonces');
     if(!p.ok) return false;
-    store.set('pending', Date.now()); store.set('autoSent', villesKey(cities)); updateSyncNote(); startPolling();
+    store.set('pending', Date.now()); store.set('pendingN', activeCommunes.length || cities.length); store.set('autoSent', villesKey(cities)); updateSyncNote(); startPolling();
     return true;
   } catch(_) { return false; }
 }
@@ -2826,7 +2842,7 @@ function maybeAutoRefresh(){             // villes ajoutées, retirées ou « + 
   if(!jeton || !DATA || !cities.length) return;
   const k = villesKey(cities);
   if(k === villesKey(DATA.villes) || k === store.get('autoSent', '')) return;
-  autoTimer = setTimeout(async () => { if(villesKey(cities) === k && await sendRequest()) toast('Villes modifiées : collecte de leurs annonces lancée automatiquement'); }, 15000);
+  autoTimer = setTimeout(async () => { if(villesKey(cities) === k && await sendRequest()) toast(`Villes modifiées : collecte lancée, environ ${collecteMin()} min`); }, 8000);
   updateSyncNote();
 }
 $('#refreshBtn').onclick = async () => {
@@ -2835,7 +2851,7 @@ $('#refreshBtn').onclick = async () => {
   if(jeton){
     const b = $('#refreshBtn'); b.disabled = true;
     const ok = await sendRequest(); b.disabled = false;
-    if(ok){ clearTimeout(autoTimer); toast('Collecte lancée : les annonces arrivent dans 5 à 15 minutes'); return; }
+    if(ok){ clearTimeout(autoTimer); toast(`Collecte lancée : environ ${collecteMin()} min, les annonces s'afficheront toutes seules`); return; }
   }
   const w = window.open('about:blank', '_blank');          // sans liaison GitHub : on passe par la page GitHub
   const payload = requestPayload();
@@ -2843,20 +2859,20 @@ $('#refreshBtn').onclick = async () => {
     + 'Le texte ci-dessous contient vos villes, chiffrées : ne le modifiez pas.\n\n' + await encryptJSON(payload, KEY);
   const url = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent('Actualiser les annonces')}&body=${encodeURIComponent(body)}`;
   if(w) w.location.href = url; else location.href = url;
-  store.set('pending', Date.now()); updateSyncNote(); startPolling();
+  store.set('pending', Date.now()); store.set('pendingN', activeCommunes.length || cities.length); updateSyncNote(); startPolling();
 };
 function startPolling(){
   clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
-    if(Date.now() - store.get('pending', 0) > 30 * 60e3){ clearInterval(pollTimer); updateSyncNote(); return; }
+    if(Date.now() - store.get('pending', 0) > pendingWindow()){ clearInterval(pollTimer); updateSyncNote(); return; }
     const before = DATA && DATA.maj;
     await loadData();
     if(DATA && DATA.maj !== before && new Date(DATA.maj) > new Date(store.get('pending', 0) - 60e3)){
       store.set('pending', 0); clearInterval(pollTimer); updateSyncNote(); toast(`Annonces mises à jour : ${fmt(DATA.annonces.length)} maisons`);
     }
-  }, 60e3);
+  }, 30e3);
 }
-function resumePolling(){ if(Date.now() - store.get('pending', 0) < 30 * 60e3) startPolling(); }
+function resumePolling(){ if(Date.now() - store.get('pending', 0) < pendingWindow()) startPolling(); }
 
 /* =========================================================
    Nouveautés depuis la dernière visite
