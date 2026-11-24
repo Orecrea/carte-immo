@@ -36,6 +36,11 @@ jobs:
         id: heure
         env:
           PROG: ${{ github.event.schedule }}
+          EVT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          AVANT: ${{ github.event.before }}
+          APRES: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           ok=1
           if [ -n "$PROG" ]; then
@@ -46,6 +51,10 @@ jobs:
             esac
           fi
           echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          # envoi de la carte (perso/demande.enc) : on regarde les fichiers vraiment modifiés par ce push
+          if [ "$EVT" = push ]; then
+            gh api "repos/$REPO/compare/$AVANT...$APRES" --jq '.files[].filename' | grep -qx 'perso/demande.enc' && echo "demande=1" >> "$GITHUB_OUTPUT" || true
+          fi
           [ "$ok" = 1 ] || echo "Pas l'heure de Paris prévue (changement d'heure) : collecte sautée."
       - uses: actions/checkout@v4
         with: {ref: main}
@@ -55,12 +64,12 @@ jobs:
 
       - name: Collecte
         id: collecte
-        if: steps.heure.outputs.ok == '1' && (github.event_name != 'push' || contains(toJSON(github.event.commits), 'perso/demande.enc'))
+        if: steps.heure.outputs.ok == '1' && (github.event_name != 'push' || steps.heure.outputs.demande == '1')
         env:
           CLE_CARTE: ${{ secrets.CLE_CARTE }}
           DEMANDE: ${{ github.event.issue.body }}
           PARTIEL: '1'                # annonces publiées au fur et à mesure (perso/partiel.enc)
-          DEMANDE_FICHIER: ${{ github.event_name == 'push' && 'perso/demande.enc' || '' }}
+          DEMANDE_FICHIER: perso/demande.enc   # dernier choix de villes envoyé par la carte, lu à chaque collecte
         run: python collecte/collecte.py ${{ github.event_name == 'schedule' && 'auto' || 'manuel' }}
 
       - name: Enregistrement
