@@ -10,7 +10,7 @@ Fichiers :
   etat/etat.enc        villes suivies, historique des prix, dernières annonces par site (chiffré)
   site/annonces.enc    ce que lit la carte (chiffré)
 """
-import json, os, re, sys, math, hashlib, unicodedata, traceback, time
+import json, os, re, sys, math, hashlib, unicodedata, traceback, time, copy, threading, subprocess
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -21,6 +21,7 @@ import sources
 
 RACINE = Path(__file__).resolve().parent.parent
 ETAT, FIN, SORTIE = RACINE / "etat/etat.enc", RACINE / "etat/fin.txt", RACINE / "site/annonces.enc"
+PARTIEL = RACINE / "perso/partiel.enc"            # annonces déjà lues, pendant la collecte
 DUREE = timedelta(days=30)
 MAINTENANT = datetime.now(timezone.utc)
 CLE = os.environ.get("CLE_CARTE", "")
@@ -28,10 +29,14 @@ CLE = os.environ.get("CLE_CARTE", "")
 journal = []
 
 
+_tl = threading.local()
+
+
 def log(m):
     """Journal détaillé (villes, prix…) : il ne va QUE dans le fichier chiffré, jamais dans les journaux
     publics de GitHub Actions. Ceux-ci n'affichent que des compteurs anonymes (voir resume_public)."""
-    journal.append(m)
+    if not getattr(_tl, "muet", False):
+        journal.append(m)
 
 
 def sortir(code, message, publier=False):
@@ -347,6 +352,69 @@ def regrouper(annonces):
     return groupes
 
 
+def construire(brutes, communes, etat):
+    """Annonces brutes -> maisons affichées (filtres, commune vérifiée, doublons regroupés, historique des prix)."""
+    # plafond de prix, rattachement aux communes, localisation vérifiée, enrichissement
+    gardees, ecartees, neufs = [], [], 0
+    for a in brutes:
+        if a["prix"] > sources.PRIX_MAX or sources.viager(a.get("titre"), a.get("desc")):
+            continue
+        if a.get("neuf") or sources.neuf(a.get("titre"), a.get("desc")):
+            neufs += 1                                 # neuf, VEFA ou projet de construction : écarté d'office
+            continue
+        c = rattacher(a, communes)
+        if not c:
+            continue
+        c = verifier_lieu(a, c, communes)
+        if not c:
+            ecartees.append(a)
+            continue
+        a["insee"], a["ville"] = c["code"], c["nom"]
+        if not a.get("cp") and c["codesPostaux"]:
+            a["cp"] = c["codesPostaux"][0]
+        if not (a.get("lat") and a.get("lng")):
+            a["lat"], a["lng"] = point_dans_commune(c, a["id"]); a["approx"] = True
+        gardees.append(enrichir(a))
+
+    # dédoublonnage, historique des prix
+    sortie, aujourd = [], MAINTENANT.date().isoformat()
+    for g in regrouper(gardees):
+        base = g[0]                                   # meilleur prix (puis la plus récente)
+        mid = next((etat["alias"][x["id"]] for x in g if x["id"] in etat["alias"]), base["id"])
+        for x in g:
+            etat["alias"][x["id"]] = mid
+        h = etat["hist"].setdefault(mid, [])
+        prix = min(x["prix"] for x in g)
+        if not h or h[-1][1] != prix:
+            h.append([aujourd, prix])
+        etat["vu"].setdefault(mid, aujourd)
+        pub = min((x["pub"] for x in g if x.get("pub")), default=None)
+        jours = jours_depuis(pub)
+        if jours is None:
+            jours = jours_depuis(etat["vu"][mid]) or 0
+        photos = []
+        for x in g:
+            photos += [p for p in x["photos"] if p not in photos] if x is base or not photos else []
+        pick = lambda k: next((x[k] for x in g if x.get(k)), None)
+        sortie.append({
+            "id": mid, "lat": round(base["lat"], 6), "lng": round(base["lng"], 6), "approx": all(x["approx"] for x in g),
+            "city": base["ville"], "cp": base["cp"], "insee": base["insee"], "type": base["type"],
+            "surf": pick("surf"), "pieces": pick("pieces"), "chambres": pick("chambres"), "terrain": pick("terrain"),
+            "price": prix, "year": pick("annee"), "dpe": pick("dpe"), "ges": pick("ges"),
+            "atouts": sorted({t for x in g for t in x["atouts"]}), "titre": pick("titre"),
+            "desc": max((x.get("desc") or "" for x in g), key=len)[:4000],
+            "source": base["source"], "liens": [{"source": x["source"], "url": x["url"], "prix": x["prix"]} for x in g if x.get("url")],
+            "photos": photos[:25], "days": jours, "neuf": any(x.get("neuf") for x in g),
+            "pro": pick("pro"), "tf": pick("tf"), "hist": h[-10:],
+        })
+    if neufs:
+        log(f"{neufs} annonce(s) de logement neuf ou de projet de construction écartée(s)")
+    if ecartees:
+        log(f"{len(ecartees)} annonce(s) écartée(s) car le bien est en réalité hors de vos communes")
+    log(f"{len(sortie)} maison(s) après regroupement des doublons ({len(gardees)} annonces lues)")
+    return sortie
+
+
 # ------------------------------------------------------------ programme
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "auto"
@@ -410,9 +478,47 @@ def main():
         except Exception as e:
             return nom, None, e
 
+    # annonces publiées au fur et à mesure (perso/partiel.enc) : la carte les affiche pendant la collecte
+    fini = threading.Event()
+
+    def instantane():
+        brutes_p = []
+        for nom in sources.SOURCES:
+            cache = etat["cache"].get(nom) or {}
+            faites = set(sources.ATTEINTES.get(nom, set()))
+            brutes_p += [a for a in cache.get("annonces", []) if a.get("insee") in codes and a.get("insee") not in faites]
+            brutes_p += list(sources.PARTIEL.get(nom, []))
+        return brutes_p
+
+    def publier_partiel():
+        _tl.muet = True
+        while not fini.wait(float(os.environ.get("PARTIEL_S", 75))):
+            try:
+                sortie_p = construire(copy.deepcopy(instantane()), communes, copy.deepcopy(etat))
+                faites = set.intersection(*sources.ATTEINTES.values()) if sources.ATTEINTES else set()
+                d = {"maj": datetime.now(timezone.utc).isoformat(timespec="seconds"), "fin": fin.isoformat(timespec="minutes"),
+                     "villes": etat.get("villes", []), "communes": [c["code"] for c in communes], "sources": {}, "journal": [],
+                     "partiel": {"debut": MAINTENANT.isoformat(timespec="seconds"), "faites": len(faites), "total": len(communes)},
+                     "annonces": sortie_p}
+                PARTIEL.parent.mkdir(parents=True, exist_ok=True)
+                PARTIEL.write_text(chiffrer(d, CLE))
+                g = ["git", "-c", "user.name=Collecte automatique", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com"]
+                subprocess.run(g + ["add", str(PARTIEL)], cwd=RACINE, check=True, capture_output=True)
+                subprocess.run(g + ["commit", "-qm", "Annonces en cours de collecte"], cwd=RACINE, check=True, capture_output=True)
+                for _ in range(3):
+                    if subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=RACINE, capture_output=True).returncode == 0:
+                        break
+                    subprocess.run(g + ["pull", "-q", "--rebase", "origin", "main"], cwd=RACINE, capture_output=True)
+            except Exception:
+                pass                                   # un instantané raté n'empêche jamais la collecte
+
+    if os.environ.get("PARTIEL") == "1" and communes:
+        threading.Thread(target=publier_partiel, daemon=True).start()
+
     bilan, brutes = {}, []
     with ThreadPoolExecutor(max_workers=len(sources.SOURCES)) as pool:   # les sites sont lus en même temps
         resultats = list(pool.map(lire, sources.SOURCES.items() if communes else []))
+    fini.set()
     for nom, res, e in resultats:
         cache = etat["cache"].get(nom) or {}
         anciennes = [a for a in cache.get("annonces", []) if a.get("insee") in codes]
@@ -437,64 +543,7 @@ def main():
         if len(toutes) < len(communes):
             log(f"{len(communes) - len(toutes)} commune(s) seront complétées à la prochaine collecte")
 
-    # plafond de prix, rattachement aux communes, localisation vérifiée, enrichissement
-    gardees, ecartees, neufs = [], [], 0
-    for a in brutes:
-        if a["prix"] > sources.PRIX_MAX or sources.viager(a.get("titre"), a.get("desc")):
-            continue
-        if a.get("neuf") or sources.neuf(a.get("titre"), a.get("desc")):
-            neufs += 1                                 # neuf, VEFA ou projet de construction : écarté d'office
-            continue
-        c = rattacher(a, communes)
-        if not c:
-            continue
-        c = verifier_lieu(a, c, communes)
-        if not c:
-            ecartees.append(a)
-            continue
-        a["insee"], a["ville"] = c["code"], c["nom"]
-        if not a.get("cp") and c["codesPostaux"]:
-            a["cp"] = c["codesPostaux"][0]
-        if not (a.get("lat") and a.get("lng")):
-            a["lat"], a["lng"] = point_dans_commune(c, a["id"]); a["approx"] = True
-        gardees.append(enrichir(a))
-
-    # dédoublonnage, historique des prix
-    sortie, aujourd = [], MAINTENANT.date().isoformat()
-    for g in regrouper(gardees):
-        base = g[0]                                   # meilleur prix (puis la plus récente)
-        mid = next((etat["alias"][x["id"]] for x in g if x["id"] in etat["alias"]), base["id"])
-        for x in g:
-            etat["alias"][x["id"]] = mid
-        h = etat["hist"].setdefault(mid, [])
-        prix = min(x["prix"] for x in g)
-        if not h or h[-1][1] != prix:
-            h.append([aujourd, prix])
-        etat["vu"].setdefault(mid, aujourd)
-        pub = min((x["pub"] for x in g if x.get("pub")), default=None)
-        jours = jours_depuis(pub)
-        if jours is None:
-            jours = jours_depuis(etat["vu"][mid]) or 0
-        photos = []
-        for x in g:
-            photos += [p for p in x["photos"] if p not in photos] if x is base or not photos else []
-        pick = lambda k: next((x[k] for x in g if x.get(k)), None)
-        sortie.append({
-            "id": mid, "lat": round(base["lat"], 6), "lng": round(base["lng"], 6), "approx": all(x["approx"] for x in g),
-            "city": base["ville"], "cp": base["cp"], "insee": base["insee"], "type": base["type"],
-            "surf": pick("surf"), "pieces": pick("pieces"), "chambres": pick("chambres"), "terrain": pick("terrain"),
-            "price": prix, "year": pick("annee"), "dpe": pick("dpe"), "ges": pick("ges"),
-            "atouts": sorted({t for x in g for t in x["atouts"]}), "titre": pick("titre"),
-            "desc": max((x.get("desc") or "" for x in g), key=len)[:4000],
-            "source": base["source"], "liens": [{"source": x["source"], "url": x["url"], "prix": x["prix"]} for x in g if x.get("url")],
-            "photos": photos[:25], "days": jours, "neuf": any(x.get("neuf") for x in g),
-            "pro": pick("pro"), "tf": pick("tf"), "hist": h[-10:],
-        })
-    if neufs:
-        log(f"{neufs} annonce(s) de logement neuf ou de projet de construction écartée(s)")
-    if ecartees:
-        log(f"{len(ecartees)} annonce(s) écartée(s) car le bien est en réalité hors de vos communes")
-    log(f"{len(sortie)} maison(s) après regroupement des doublons ({len(gardees)} annonces lues)")
+    sortie = construire(brutes, communes, etat)
 
     # nettoyage : on oublie les annonces disparues depuis plus de 90 jours
     actifs = {a["id"] for a in sortie}

@@ -2778,6 +2778,24 @@ async function loadData(){
   let d;
   try { d = await decryptJSON(txt, KEY); } catch(_) { setSyncTxt('<b>Mot de passe requis</b>'); showLock('Ce mot de passe ne correspond pas.'); return false; }
   lastLoad = Date.now();
+  if(DATA && DATA.partiel && new Date(d.maj) < new Date(DATA.partiel.debut) - 60e3) return false;   // collecte en cours affichée : on garde
+  return applyData(d);
+}
+// annonces déjà lues par la collecte en cours (perso/partiel.enc, lu directement dans le dépôt)
+async function loadPartial(){
+  if(!jeton || !KEY) return false;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/perso/partiel.enc?ref=main&t=${Date.now()}`, {cache:'no-store',
+      headers:{Authorization:'Bearer ' + jeton, Accept:'application/vnd.github.raw', 'X-GitHub-Api-Version':'2022-11-28'}});
+    if(!r.ok) return false;
+    const d = await decryptJSON(await r.text(), KEY);
+    if(!d.partiel || new Date(d.partiel.debut) < new Date(store.get('pending', 0) - 120e3)) return false;   // ancienne collecte
+    if(DATA && !DATA.partiel && new Date(DATA.maj) >= new Date(d.partiel.debut) - 60e3) return false;           // résultat final déjà là
+    if(DATA && DATA.maj === d.maj) return false;
+    applyData(d); return true;
+  } catch(_) { return false; }
+}
+function applyData(d){
   const changed = !DATA || DATA.maj !== d.maj;
   DATA = d;
   if(changed){
@@ -2832,10 +2850,13 @@ function updateSyncNote(){
   clearInterval(progTimer);
   if(recent){
     const tot = collecteMin(), paint = () => {
-      const pass = (Date.now() - pending) / 60e3, pct = Math.min(96, pass / tot * 100), reste = Math.max(0, Math.ceil(tot - pass));
+      const pass = (Date.now() - pending) / 60e3, pr = DATA && DATA.partiel;
+      const pct = Math.min(96, Math.max(pass / tot * 100, pr ? pr.faites / pr.total * 100 : 0)), reste = Math.max(0, Math.ceil(tot - pass));
       el.hidden = false; el.className = 'sync-note ok';
       el.innerHTML = `<b>Collecte en cours</b> (lancée à ${new Date(pending).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}, ${store.get('pendingN', 0) || activeCommunes.length} communes)
-        <div class="sync-bar"><i style="width:${pct}%"></i></div>${reste ? `Encore environ ${reste} min` : 'Presque fini, encore quelques instants'} : les annonces s'afficheront toutes seules, vous pouvez continuer à naviguer.`;
+        <div class="sync-bar"><i style="width:${pct}%"></i></div>${reste ? `Encore environ ${reste} min` : 'Presque fini, encore quelques instants'}${pr
+          ? ` · ${pr.faites}/${pr.total} communes lues, les maisons s'ajoutent au fur et à mesure.`
+          : ' : les maisons s\'afficheront au fur et à mesure, vous pouvez continuer à naviguer.'}`;
     };
     paint(); progTimer = setInterval(paint, 15e3); return;
   }
@@ -2894,7 +2915,8 @@ function startPolling(){
     if(Date.now() - store.get('pending', 0) > pendingWindow()){ clearInterval(pollTimer); updateSyncNote(); return; }
     const before = DATA && DATA.maj;
     await loadData();
-    if(DATA && DATA.maj !== before && new Date(DATA.maj) > new Date(store.get('pending', 0) - 60e3)){
+    if(!(DATA && !DATA.partiel && DATA.maj !== before)) await loadPartial();
+    if(DATA && !DATA.partiel && DATA.maj !== before && new Date(DATA.maj) > new Date(store.get('pending', 0) - 60e3)){
       store.set('pending', 0); clearInterval(pollTimer); updateSyncNote(); toast(`Annonces mises à jour : ${fmt(DATA.annonces.length)} maisons`);
     }
   }, 30e3);

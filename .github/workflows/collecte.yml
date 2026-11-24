@@ -59,6 +59,7 @@ jobs:
         env:
           CLE_CARTE: ${{ secrets.CLE_CARTE }}
           DEMANDE: ${{ github.event.issue.body }}
+          PARTIEL: '1'                # annonces publiées au fur et à mesure (perso/partiel.enc)
           DEMANDE_FICHIER: ${{ github.event_name == 'push' && 'perso/demande.enc' || '' }}
         run: python collecte/collecte.py ${{ github.event_name == 'schedule' && 'auto' || 'manuel' }}
 

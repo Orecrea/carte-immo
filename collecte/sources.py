@@ -19,6 +19,12 @@ PRIX_MAX = 800_000             # au-delà, les annonces sont ignorées dès la c
 
 LIMITE = None                  # heure (time.time()) à laquelle chaque site s'arrête, pour finir avant la limite de GitHub
 ATTEINTES = {}                 # site -> codes des communes effectivement lues (les autres gardent l'ancien résultat)
+PARTIEL = {}                   # site -> annonces déjà lues pendant la collecte (publiées au fur et à mesure)
+
+
+def _sortie(nom):
+    PARTIEL[nom] = []
+    return PARTIEL[nom]
 
 
 def parcourir(nom, communes, log):
@@ -127,7 +133,7 @@ def viager(titre, desc=""):
 # ---------------------------------------------------------------- Bien'ici
 def bienici(communes, log):
     s = session()
-    out = []
+    out = _sortie("Bien'ici")
     for c in parcourir("Bien'ici", communes, log):
         r = get(s, "https://res.bienici.com/suggest.json", params={"q": c["nom"]}).json()
         zones = [z for z in r if c["code"] in (z.get("insee_codes") or [z.get("insee_code")])] or \
@@ -245,7 +251,7 @@ def espaces_atypiques(communes, log):
 def notaires(communes, log):
     s = session()
     api = "https://www.immobilier.notaires.fr/pub-services/inotr-www-annonces/v1/annonces"
-    out = []
+    out = _sortie("Notaires de France")
     for c in parcourir("Notaires de France", communes, log):
         page, pages = 1, 1
         while page <= min(pages, 4):
@@ -369,7 +375,7 @@ def safti_fiche(s, a):
 
 def safti(communes, log):
     s = session()
-    out, vus = [], set()
+    out, vus = _sortie("SAFTI"), set()
     for c in parcourir("SAFTI", communes, log):
         for cp in (c["codesPostaux"] or [])[:3]:
             r = s.get(f"https://www.safti.fr/annonces/achat/maison/{slug(c['nom'])}-{cp}")
