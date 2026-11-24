@@ -72,18 +72,23 @@ def get_json(url, **kw):
     return r.json()
 
 
-def communes_detail(codes):
-    """Nom, codes postaux, centre et contour officiels (geo.api.gouv.fr)."""
-    out = []
-    for code in codes:
+def communes_detail(codes, deja=None):
+    """Nom, codes postaux, centre et contour officiels (geo.api.gouv.fr) ; déjà connus : repris de la collecte précédente."""
+    deja = deja if deja is not None else {}
+    manquants = [c for c in codes if c not in deja]
+    def une(code):
         try:
             j = get_json(f"https://geo.api.gouv.fr/communes/{code}",
                          params={"fields": "nom,codesPostaux,centre,contour", "format": "json", "geometry": "contour"})
-            out.append({"code": code, "nom": j["nom"], "codesPostaux": j.get("codesPostaux") or [],
-                        "centre": (j.get("centre") or {}).get("coordinates"), "contour": j.get("contour")})
+            return {"code": code, "nom": j["nom"], "codesPostaux": j.get("codesPostaux") or [],
+                    "centre": (j.get("centre") or {}).get("coordinates"), "contour": j.get("contour")}
         except Exception as e:
             log(f"Commune {code} introuvable ({e})")
-    return out
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for c in pool.map(une, manquants):
+            if c:
+                deja[c["code"]] = c
+    return [deja[c] for c in codes if c in deja]
 
 
 def voisines(code):
@@ -115,14 +120,17 @@ def voisines(code):
                     pts.append((py, px))
                 nxt += step
             acc += d
-    trouvees = {}
-    for la, lo in pts[:200]:
+    def point(p):
         try:
-            for c in get_json("https://geo.api.gouv.fr/communes", params={"lat": f"{la:.5f}", "lon": f"{lo:.5f}", "fields": "code,nom", "format": "json"}):
+            return get_json("https://geo.api.gouv.fr/communes", params={"lat": f"{p[0]:.5f}", "lon": f"{p[1]:.5f}", "fields": "code,nom", "format": "json"})
+        except Exception:
+            return []
+    trouvees = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:   # plusieurs points interrogés en même temps
+        for res in pool.map(point, pts[:200]):
+            for c in res:
                 if c["code"] != code:
                     trouvees[c["code"]] = c["nom"]
-        except Exception:
-            pass
     return [{"code": k, "name": v} for k, v in trouvees.items()]
 
 
@@ -454,12 +462,14 @@ def main():
         if v.get("code") and v["code"] not in codes:
             codes.append(v["code"])
         if v.get("nb"):
-            vs = voisines(v["code"])
+            vs = etat.setdefault("voisines", {}).get(v["code"]) or voisines(v["code"])   # limitrophes : calculées une fois
+            if vs:
+                etat["voisines"][v["code"]] = vs
             codes += [c["code"] for c in vs if c["code"] not in codes]
             log(f"{v.get('name', v['code'])} : {len(vs)} commune(s) limitrophe(s)")
     if not codes:
         log("Aucune ville choisie : ajoutez des villes dans la carte puis cliquez sur Actualiser.")
-    communes = communes_detail(codes)
+    communes = communes_detail(codes, etat.setdefault("geo", {}))
     log(f"{len(communes)} commune(s) suivie(s)")
 
     # les communes jamais lues (ou lues il y a le plus longtemps) passent en premier :
