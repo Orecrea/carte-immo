@@ -1607,13 +1607,13 @@ function hideToast(){ $('#toast').classList.remove('show'); }
 let zones = [], addMode = false, zoneSeq = 0;
 const speed = m => MODES[m].kmh * (m === 'walk' ? 1 : 0.8);                 // km/h, 0,8 = détours et attentes
 const estMin = (km, m) => Math.max(1, Math.round(km / speed(m) * 60));
-function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts, cities, off}) => ({id, name, color, kind, origins, opts, cities, off}))); }
+function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts, cities, off, src}) => ({id, name, color, kind, origins:origins.map(({lat, lng, name}) => ({lat, lng, name})), opts, cities, off, src}))); }
 // villes concernées par un trajet (null = toutes) ; pour un trajet « gares », seuls les départs de ces villes comptent
 const zoneCities = z => z.cities && z.cities.length ? z.cities : null;
 function usedOrigins(z){
   const zc = zoneCities(z);
   if(z.kind !== 'stations' || !zc) return z.origins;
-  const u = z.origins.filter(o => zc.includes(o.c || (activeCommunes.length ? (o.c = cityOfPoint(o.lat, o.lng)) : cityOfPoint(o.lat, o.lng))));
+  const u = z.origins.filter(o => originCities(o).some(k => zc.includes(k)));
   return u.length ? u : z.origins;
 }
 const legsRadius = legs => legs.reduce((r, g) => r + speed(g.mode) * g.min / 60 * 1000, 0);
@@ -1860,7 +1860,7 @@ function renderZoneList(){
         <button class="icon-btn" data-del aria-label="Supprimer ${esc(z.name)}">×</button>
       </div>
       ${cities.length > 1 ? `<div class="zone-for">S'applique aux maisons de :<div class="chips">${cities.map(c => { const on = !zoneCities(z) || zoneCities(z).includes(c.code);
-          return `<label class="${on ? '' : 'off'}"><input type="checkbox" data-zcity="${c.code}" ${on ? 'checked' : ''}>${esc(c.name)}</label>`; }).join('')}</div></div>
+          return `<label class="${on ? '' : 'off'}"><input type="checkbox" data-zcity="${c.code}" ${on ? 'checked' : ''}>${esc(c.name)}${c.nb ? ' <small title="et ses communes limitrophes">+ voisines</small>' : ''}</label>`; }).join('')}</div></div>
         ${z.kind === 'stations' && (!zoneCities(z) || zoneCities(z).length > 1) ? '<button class="link addl" data-split style="margin:-2px 0 8px">↔ Séparer en un trajet par ville</button>' : ''}` : ''}
       ${z.opts.map((legs, oi) => `${oi ? '<div class="or-sep">OU</div>' : ''}<div class="opt" data-opt="${oi}">
         ${z.opts.length > 1 || legs.length > 1 ? `<div class="opt-h"><span>${z.opts.length > 1 ? 'Trajet ' + (oi + 1) : 'Trajet'}</span><span class="sum">${legs.length > 1 ? legs.map(g => MODES[g.mode].icon + ' ' + g.min).join(' + ') + ' = ' + legs.reduce((t, g) => t + g.min, 0) + ' min au total' : ''}</span>${z.opts.length > 1 ? '<button class="icon-btn" data-rmopt aria-label="Retirer ce trajet">×</button>' : ''}</div>` : ''}
@@ -1912,6 +1912,15 @@ $('#zones').addEventListener('change', e => {
   z.off = !e.target.checked; drawZones(); renderZoneList(); renderListings(); saveZones();
 });
 // un trajet « gares de mes villes » commun → un trajet par ville, chacun réglable à part
+/* Villes choisies dont relève une commune : elle-même si elle est choisie, et chaque ville dont elle est limitrophe (option « + voisines ») */
+let communeVer = 0;
+const groupsOf = c => [...(c.main ? [c.code] : []), ...(c.parents || (c.parent ? [c.parent] : []))].filter(k => cities.some(x => x.code === k && (k === c.code || x.nb)));
+function citiesOfPoint(lat, lng){
+  const cs = activeCommunes.filter(c => inGeom(lng, lat, c.geom));
+  if(cs.length) return [...new Set(cs.flatMap(groupsOf))];
+  const k = cityOfPoint(lat, lng); return k ? [k] : [];
+}
+function originCities(o){ if(o.cv !== communeVer || !o.cs){ o.cs = citiesOfPoint(o.lat, o.lng); o.cv = communeVer; } return o.cs; }
 function cityOfPoint(lat, lng){
   const c = activeCommunes.find(c => inGeom(lng, lat, c.geom));
   if(c) return c.main ? c.code : c.parent;
@@ -1919,8 +1928,7 @@ function cityOfPoint(lat, lng){
   return best ? best.c.code : null;
 }
 function splitByCity(z){
-  z.origins.forEach(o => { o.c = o.c || cityOfPoint(o.lat, o.lng); });
-  const codes = (zoneCities(z) || cities.map(c => c.code)).filter(code => z.origins.some(o => o.c === code));
+  const codes = (zoneCities(z) || cities.map(c => c.code)).filter(code => z.origins.some(o => originCities(o).includes(code)));
   const i = zones.indexOf(z); zones.splice(i, 1);
   codes.forEach(code => {
     const c = cities.find(x => x.code === code); if(!c) return;
@@ -1940,6 +1948,23 @@ $('#matchMode').value = F.match;
 $('#matchMode').onchange = e => { F.match = e.target.value; renderListings(); };
 
 /* « Gares de mes villes » : toutes les gares des villes choisies (et de leurs communes limitrophes si cochées) */
+async function topUpStations(){
+  const zs = zones.filter(z => z.kind === 'stations'); if(!zs.length || !activeCommunes.length) return;
+  zs.forEach(z => { if(!z.src) z.src = activeCommunes.filter(c => z.origins.some(o => inGeom(o.lng, o.lat, c.geom))).map(c => c.code); });
+  const miss = activeCommunes.filter(c => zs.some(z => !z.src.includes(c.code)));
+  if(!miss.length) return;
+  const res = await Promise.all(miss.map(c => stationsOf(c.code).catch(() => null)));
+  let added = 0;
+  zs.forEach(z => {
+    miss.forEach((c, i) => {
+      if(z.src.includes(c.code) || !res[i]) return;
+      res[i].forEach(s => { if(!z.origins.some(o => kmDist(o.lat, o.lng, s.lat, s.lng) < .3)){ z.origins.push({lat:s.lat, lng:s.lng, name:s.name}); added++; } });
+      z.src.push(c.code);
+    });
+  });
+  saveZones();
+  if(added){ zs.forEach(z => scheduleCompute(z, 50)); drawZones(); }
+}
 $('#allStations').onclick = async () => {
   if(!cities.length) return;
   const btn = $('#allStations'); btn.disabled = true; btn.textContent = '🚉 Recherche…';
@@ -1957,12 +1982,12 @@ $('#allStations').onclick = async () => {
       }
     });
     if(!origins.length){ toast('Aucune gare trouvée dans ces villes'); return; }
-    origins.forEach(o => { o.c = cityOfPoint(o.lat, o.lng); });
+    const src = list.map(c => c.code);
     // un trajet par ville (gares de la ville et de ses voisines) ; cochez d'autres villes dans un trajet pour en faire un trajet type
     const made = [];
     cities.forEach(c => {
       if(zones.some(z => z.kind === 'stations' && zoneCities(z) && zoneCities(z).includes(c.code))) return;   // ville déjà couverte
-      if(origins.some(o => o.c === c.code)) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code]}));
+      if(origins.some(o => originCities(o).includes(c.code))) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code], src}));
     });
     if(made.length) fitTo(made.reduce((b, z) => b.add(zoneBounds(z)), new BB()).pad(.2));
     toast(made.length ? `Un trajet par ville : réglez chacun, ou cochez plusieurs villes dans un trajet pour l'appliquer à toutes${sansGare.length ? ` · centre-ville pour ${sansGare.slice(0, 3).join(', ')}` : ''}` : 'Chaque ville a déjà son trajet');
@@ -2024,9 +2049,10 @@ function passCriteria(l){
       && (F.tmin == null || ok(l.terrain, F.tmin)) && ok(l.pieces, F.rooms) && (!l.dpe || DPE.indexOf(l.dpe) <= DPE.indexOf(F.dpe)) && l.days <= F.age;
 }
 let tripOff = store.get('tripOff', []);              // villes où le critère de trajet ne s'applique pas
-function cityGroup(l){                                // ville choisie à laquelle appartient l'annonce (elle-même ou une de ses voisines)
+function cityGroup(l){ return cityGroups(l)[0] || null; }
+function cityGroups(l){                               // villes choisies dont relève l'annonce : sa ville, et celles dont elle est voisine
   const c = activeCommunes.find(c => c.code === l.insee) || activeCommunes.find(c => inGeom(l.lng, l.lat, c.geom));
-  return c ? (c.main ? c.code : c.parent) : null;
+  return c ? groupsOf(c) : [];
 }
 function renderTripCities(){
   const box = $('#tripCities'); box.hidden = true;      // remplacé par le choix des villes dans chaque trajet
@@ -2041,8 +2067,8 @@ $('#tripCities').addEventListener('change', e => {
 });
 // trajets qui s'appliquent à une annonce : ceux de sa ville, et les destinations communes (sauf ville décochée)
 function zonesFor(l){
-  const g = cityGroup(l);
-  return zones.filter(z => !z.off && (!zoneCities(z) || zoneCities(z).includes(g)));
+  const gs = cityGroups(l);
+  return zones.filter(z => !z.off && (!zoneCities(z) || gs.some(g => zoneCities(z).includes(g))));
 }
 function inArea(l){
   if(!zones.length) return true;
@@ -2473,7 +2499,7 @@ let communeSeq = 0, fitCities = false;
 async function updateCommunes(){
   const seq = ++communeSeq;
   if(!cities.length){ activeCommunes = []; drawCommunes(); renderListings(); return; }
-  const show = list => { if(seq !== communeSeq) return; activeCommunes = list.filter(c => c.geom); updateSyncNote(); drawCommunes(); renderListings(); saveGeo(); };
+  const show = list => { if(seq !== communeSeq) return; activeCommunes = list.filter(c => c.geom); communeVer++; updateSyncNote(); drawCommunes(); renderListings(); saveGeo(); };
   // 1) les villes choisies tout de suite
   const main = cities.map(c => ({code:c.code, name:c.name, main:true}));
   const geoms = await Promise.all(main.map(c => fetchContour(c.code).catch(() => null)));
@@ -2490,14 +2516,15 @@ async function updateCommunes(){
     let ns = [];
     try { ns = await fetchNeighbors(c.code); } catch(_) {}
     if(!ns.length){ fails.push(c.name); return; }
-    const add = ns.filter(n => !list.some(x => x.code === n.code)).map(n => ({...n, main:false, parent:c.code}));
+    ns.forEach(n => { const x = list.find(x => x.code === n.code); if(x && x.code !== c.code){ x.parents = x.parents || (x.parent ? [x.parent] : []); if(!x.parents.includes(c.code)) x.parents.push(c.code); } });
+    const add = ns.filter(n => !list.some(x => x.code === n.code)).map(n => ({...n, main:false, parent:c.code, parents:[c.code]}));
     add.forEach(n => list.push(n));
     const gs = await Promise.all(add.map(n => fetchContour(n.code).catch(() => null)));
     add.forEach((n, i) => n.geom = gs[i]);
     show(list);
   }));
   if(seq !== communeSeq) return;
-  setStatus(''); maybeAutoRefresh();
+  setStatus(''); maybeAutoRefresh(); topUpStations();
   if(fails.length) toast(`Communes limitrophes indisponibles pour ${fails.join(', ')} : réessayez dans un instant`);
 }
 /* Couleur propre à chaque ville, reprise par son contour et ses communes voisines */
