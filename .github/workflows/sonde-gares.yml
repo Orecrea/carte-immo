@@ -1,0 +1,11 @@
+name: sonde gares (temporaire)
+on:
+  push:
+    branches: [claude/project-thread-pfzdw7]
+    paths: ['.github/workflows/sonde-gares.yml', 'outils/sonde_gares.py']
+jobs:
+  sonde:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 outils/sonde_gares.py
