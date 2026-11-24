@@ -26,6 +26,7 @@ function paintCitiesBtn(){
   $('#citiesSum').textContent = `${CITY_TOTAL} maison${CITY_TOTAL > 1 ? 's' : ''} avec vos critères`;
 }
 function renderCityChips(){
+  if(typeof renderTripCities === 'function') renderTripCities();
   $('#cityChips').innerHTML = cities.map(c => {
     const nbs = activeCommunes.filter(x => !x.main && x.parent === c.code).length;
     return `<div class="crow" style="--cc:${c.col}">

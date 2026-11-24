@@ -129,7 +129,8 @@ rep_between('function zoneBounds(z){', 'function renderZoneStatus(z){', (HERE / 
 rep("else if(btn.hasAttribute('data-focus')) map.flyToBounds(zoneBounds(z).pad(.1), {duration:.6});",
     "else if(btn.hasAttribute('data-focus')) fitTo(zoneBounds(z).pad(.1), {duration:600});")
 rep("const ctr = cc ? [cc.lat, cc.lng] : g ? L.geoJSON(g).getBounds().getCenter() : null;", "const ctr = cc ? [cc.lat, cc.lng] : g ? BB.geom(g).center() : null;")
-rep("    map.flyToBounds(zoneBounds(z).pad(.2), {duration:.7});", "    fitTo(zoneBounds(z).pad(.2));")
+rep("    if(made.length) map.flyToBounds(made.reduce((b, z) => b.extend(zoneBounds(z)), L.latLngBounds([])).pad(.2), {duration:.7});",
+    "    if(made.length) fitTo(made.reduce((b, z) => b.add(zoneBounds(z)), new BB()).pad(.2));")
 rep("  map.flyToBounds(zoneBounds(z).pad(.1), {duration:.7});", "  fitTo(zoneBounds(z).pad(.1));")
 rep("map.on('click', e => { if(!addMode) return; addZone(e.latlng.lat, e.latlng.lng);",
     "map.on('click', e => { if(!addMode) return; addZone(e.lngLat.lat, e.lngLat.lng);")
@@ -150,8 +151,6 @@ rep("map.flyTo([l.lat, l.lng], 16, {duration:.6});", "map.flyTo({center:[l.lng, 
 # Villes : contours colorés, panneau « Mes villes »
 rep("const citiesLayer = L.layerGroup().addTo(map);\n", '')
 rep_between('function drawCommunes(){', '\nconst q = $(\'#q\')', (HERE / 'villes.js').read_text())
-rep("    const add = ns.filter(n => !list.some(x => x.code === n.code)).map(n => ({...n, main:false}));",
-    "    const add = ns.filter(n => !list.some(x => x.code === n.code)).map(n => ({...n, main:false, parent:c.code}));")
 rep("  if(e.key === 'Backspace' && !q.value && cities.length){ cities.pop(); renderCityChips(); updateCommunes(); return; }\n", '')
 rep("  if(!cities.some(c => c.code === p.citycode)) cities.push({code:p.citycode, name:p.city || p.name, cp:p.postcode, lat, lng, nb:false});",
     "  if(!cities.some(c => c.code === p.citycode)) cities.push({code:p.citycode, name:p.city || p.name, cp:p.postcode, lat, lng, nb:false, col:nextCityColor()});")
