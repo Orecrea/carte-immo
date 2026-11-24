@@ -500,11 +500,16 @@ def main():
 
     def publier_partiel():
         _tl.muet = True
-        attente = 30                                   # premier aperçu vite, puis toutes les ~75 s
+        t0 = time.time()
+        communes_nommees("Paris")                      # liste des communes de France chargée tout de suite
+        print(f"(aperçu : liste des communes chargée en {time.time() - t0:.0f} s)", file=sys.stderr)
+        attente = 20                                   # premier aperçu vite, puis toutes les ~75 s
         while not fini.wait(attente):
             attente = float(os.environ.get("PARTIEL_S", 75))
             try:
+                t0 = time.time()
                 sortie_p = construire(instantane(), communes, copy.deepcopy(etat))
+                print(f"(aperçu : {len(sortie_p)} maisons préparées en {time.time() - t0:.0f} s)", file=sys.stderr)
                 faites = set.intersection(*sources.ATTEINTES.values()) if sources.ATTEINTES else set()
                 d = {"maj": datetime.now(timezone.utc).isoformat(timespec="seconds"), "fin": fin.isoformat(timespec="minutes"),
                      "villes": etat.get("villes", []), "communes": [c["code"] for c in communes], "sources": {}, "journal": [],
