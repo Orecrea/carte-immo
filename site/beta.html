@@ -143,6 +143,10 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
   .zone-on input{accent-color:var(--c);margin:0}
   .zone.off{opacity:.55}
   .zone-for{font-size:12px;color:var(--muted);margin:-4px 0 8px}
+  .zone-for .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+  .zone-for label{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:3px 9px 3px 7px;background:var(--panel);color:var(--text);cursor:pointer;font-size:12px}
+  .zone-for label.off{color:var(--faint);background:var(--bg)}
+  .zone-for input{accent-color:var(--c);margin:0}
   .trip-cities .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .trip-cities label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 8px;background:var(--panel);color:var(--text);cursor:pointer;font-size:12.5px}
   .trip-cities label.off{color:var(--faint);background:var(--bg);text-decoration:line-through}
@@ -1590,10 +1594,18 @@ function hideToast(){ $('#toast').classList.remove('show'); }
 let zones = [], addMode = false, zoneSeq = 0;
 const speed = m => MODES[m].kmh * (m === 'walk' ? 1 : 0.8);                 // km/h, 0,8 = détours et attentes
 const estMin = (km, m) => Math.max(1, Math.round(km / speed(m) * 60));
-function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts, city, off}) => ({id, name, color, kind, origins, opts, city, off}))); }
+function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts, cities, off}) => ({id, name, color, kind, origins, opts, cities, off}))); }
+// villes concernées par un trajet (null = toutes) ; pour un trajet « gares », seuls les départs de ces villes comptent
+const zoneCities = z => z.cities && z.cities.length ? z.cities : null;
+function usedOrigins(z){
+  const zc = zoneCities(z);
+  if(z.kind !== 'stations' || !zc) return z.origins;
+  const u = z.origins.filter(o => zc.includes(o.c || (activeCommunes.length ? (o.c = cityOfPoint(o.lat, o.lng)) : cityOfPoint(o.lat, o.lng))));
+  return u.length ? u : z.origins;
+}
 const legsRadius = legs => legs.reduce((r, g) => r + speed(g.mode) * g.min / 60 * 1000, 0);
 function approxRadius(z){ return Math.max(...z.opts.map(legsRadius)); }
-function nearestOrigin(z, l){ let best = null; z.origins.forEach(o => { const d = distM([o.lat, o.lng], [l.lat, l.lng]); if(!best || d < best.d) best = {o, d}; }); return best; }
+function nearestOrigin(z, l){ let best = null; usedOrigins(z).forEach(o => { const d = distM([o.lat, o.lng], [l.lat, l.lng]); if(!best || d < best.d) best = {o, d}; }); return best; }
 function zoneContains(z, l){
   if(z.poly) return inGeom(l.lng, l.lat, z.poly);
   return nearestOrigin(z, l).d <= approxRadius(z);            // en attendant le calcul
@@ -1757,7 +1769,7 @@ async function legIso(points, mode, min, z){
 async function computeZone(z){
   const run = z.run = (z.run || 0) + 1;
   z.state = 'calc'; z.approx = false; z.fail = false; z.pt = false; z.noPt = false; z.done = 0;
-  const groups = clusterOrigins(z.origins);
+  const groups = clusterOrigins(usedOrigins(z));
   const samplesOf = g => Math.min(24, Math.max(8, g.length * 3));
   z.total = z.opts.reduce((t, legs) => t + groups.reduce((u, g) => u + g.length + (legs.length - 1) * samplesOf(g), 0), 0);
   renderZoneStatus(z); drawZones();
@@ -1794,7 +1806,7 @@ function addZone(lat, lng, name, legs = [{mode:'transit', min:20}], extra = {}){
 function zoneBounds(z){
   if(z.poly) return BB.geom(z.poly);
   const b = new BB(), r = approxRadius(z);
-  z.origins.forEach(o => { const dy = r / 111320, dx = r / (111320 * Math.cos(o.lat * Math.PI / 180)); b.ext(o.lat - dy, o.lng - dx); b.ext(o.lat + dy, o.lng + dx); });
+  usedOrigins(z).forEach(o => { const dy = r / 111320, dx = r / (111320 * Math.cos(o.lat * Math.PI / 180)); b.ext(o.lat - dy, o.lng - dx); b.ext(o.lat + dy, o.lng + dx); });
   return b;
 }
 let zoneMarkers = [];
@@ -1802,12 +1814,12 @@ function drawZones(){
   const feats = [];
   zones.forEach(z => {
     if(z.poly) feats.push({type:'Feature', geometry:z.poly, properties:{c:z.color, approx:0}});
-    else z.origins.forEach(o => feats.push({type:'Feature', geometry:circleGeom(o.lat, o.lng, approxRadius(z)), properties:{c:z.color, approx:1}}));
+    else usedOrigins(z).forEach(o => feats.push({type:'Feature', geometry:circleGeom(o.lat, o.lng, approxRadius(z)), properties:{c:z.color, approx:1}}));
   });
   setSrc('zones', FC(feats));
   // points de départ : peu nombreux, déplaçables à la main -> marqueurs HTML
   zoneMarkers.forEach(m => m.remove()); zoneMarkers = [];
-  zones.forEach(z => z.origins.forEach(o => {
+  zones.forEach(z => usedOrigins(z).forEach(o => {
     const el = document.createElement('div'); el.className = 'zone-dot' + (z.kind === 'stations' ? ' st' : ''); el.style.background = z.color;
     el.title = `${o.name || z.name} · ${legsLabel(z)}`;
     const m = new maplibregl.Marker({element:el, draggable:z.kind === 'point'}).setLngLat([o.lng, o.lat]).addTo(map);
@@ -1834,8 +1846,9 @@ function renderZoneList(){
         <label class="zone-on" title="${z.off ? 'Critère désactivé : les maisons ne sont pas filtrées' : 'Critère actif'}"><input type="checkbox" data-on ${z.off ? '' : 'checked'}><span>${z.off ? 'Désactivé' : 'Actif'}</span></label>
         <button class="icon-btn" data-del aria-label="Supprimer ${esc(z.name)}">×</button>
       </div>
-      ${z.kind === 'stations' && !z.city && cities.length > 1 ? '<button class="link addl" data-split style="margin:-4px 0 8px">↔ Régler ce trajet ville par ville</button>' : ''}
-      ${z.city ? `<div class="zone-for">S'applique aux maisons de ${esc((cities.find(c => c.code === z.city) || {}).name || 'cette ville')}${(cities.find(c => c.code === z.city) || {}).nb ? ' et de ses voisines' : ''}</div>` : ''}
+      ${cities.length > 1 ? `<div class="zone-for">S'applique aux maisons de :<div class="chips">${cities.map(c => { const on = !zoneCities(z) || zoneCities(z).includes(c.code);
+          return `<label class="${on ? '' : 'off'}"><input type="checkbox" data-zcity="${c.code}" ${on ? 'checked' : ''}>${esc(c.name)}</label>`; }).join('')}</div></div>
+        ${z.kind === 'stations' && (!zoneCities(z) || zoneCities(z).length > 1) ? '<button class="link addl" data-split style="margin:-2px 0 8px">↔ Séparer en un trajet par ville</button>' : ''}` : ''}
       ${z.opts.map((legs, oi) => `${oi ? '<div class="or-sep">OU</div>' : ''}<div class="opt" data-opt="${oi}">
         ${z.opts.length > 1 || legs.length > 1 ? `<div class="opt-h"><span>${z.opts.length > 1 ? 'Trajet ' + (oi + 1) : 'Trajet'}</span><span class="sum">${legs.length > 1 ? legs.map(g => MODES[g.mode].icon + ' ' + g.min).join(' + ') + ' = ' + legs.reduce((t, g) => t + g.min, 0) + ' min au total' : ''}</span>${z.opts.length > 1 ? '<button class="icon-btn" data-rmopt aria-label="Retirer ce trajet">×</button>' : ''}</div>` : ''}
         ${legs.map((g, i) => `
@@ -1870,6 +1883,17 @@ $('#zones').addEventListener('click', e => {
   else if(btn.hasAttribute('data-split')) splitByCity(z);
 });
 $('#zones').addEventListener('change', e => {
+  if(e.target.dataset.zcity){
+    const z = zones.find(x => x.id == e.target.closest('.zone').dataset.id), code = e.target.dataset.zcity;
+    let list = zoneCities(z) ? [...z.cities] : cities.map(c => c.code);
+    list = e.target.checked ? [...new Set([...list, code])] : list.filter(x => x !== code);
+    if(!list.length){ e.target.checked = true; toast('Gardez au moins une ville, ou désactivez le trajet'); return; }
+    z.cities = list.length === cities.length && z.kind !== 'stations' ? null : list;
+    if(z.kind === 'stations') z.name = 'Trajet ' + list.map(code => (cities.find(c => c.code === code) || {}).name).filter(Boolean).join(', ');
+    renderZoneList(); renderListings(); saveZones();
+    if(z.kind === 'stations'){ z.poly = null; drawZones(); scheduleCompute(z, 300); }
+    return;
+  }
   if(!e.target.hasAttribute('data-on')) return;
   const z = zones.find(x => x.id == e.target.closest('.zone').dataset.id);
   z.off = !e.target.checked; drawZones(); renderZoneList(); renderListings(); saveZones();
@@ -1882,12 +1906,12 @@ function cityOfPoint(lat, lng){
   return best ? best.c.code : null;
 }
 function splitByCity(z){
-  const groups = {};
-  z.origins.forEach(o => { const k = cityOfPoint(o.lat, o.lng); if(k) (groups[k] = groups[k] || []).push(o); });
+  z.origins.forEach(o => { o.c = o.c || cityOfPoint(o.lat, o.lng); });
+  const codes = (zoneCities(z) || cities.map(c => c.code)).filter(code => z.origins.some(o => o.c === code));
   const i = zones.indexOf(z); zones.splice(i, 1);
-  Object.entries(groups).forEach(([code, origins]) => {
+  codes.forEach(code => {
     const c = cities.find(x => x.code === code); if(!c) return;
-    addZone(0, 0, 'Gares de ' + c.name, JSON.parse(JSON.stringify(z.opts[0])), {kind:'stations', origins, city:code, opts:JSON.parse(JSON.stringify(z.opts))});
+    addZone(0, 0, 'Trajet ' + c.name, JSON.parse(JSON.stringify(z.opts[0])), {kind:'stations', origins:JSON.parse(JSON.stringify(z.origins)), cities:[code], opts:JSON.parse(JSON.stringify(z.opts))});
   });
   toast('Un trajet par ville : réglez chacun comme vous voulez');
 }
@@ -1920,15 +1944,15 @@ $('#allStations').onclick = async () => {
       }
     });
     if(!origins.length){ toast('Aucune gare trouvée dans ces villes'); return; }
-    // un trajet par ville choisie (avec les gares de ses voisines) : chacun se règle à part
+    origins.forEach(o => { o.c = cityOfPoint(o.lat, o.lng); });
+    // un trajet par ville (gares de la ville et de ses voisines) ; cochez d'autres villes dans un trajet pour en faire un trajet type
     const made = [];
     cities.forEach(c => {
-      if(zones.some(z => z.city === c.code)) return;           // déjà créé : on le garde tel quel
-      const mine = origins.filter(o => cityOfPoint(o.lat, o.lng) === c.code);
-      if(mine.length) made.push(addZone(0, 0, 'Gares de ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:mine, city:c.code}));
+      if(zones.some(z => z.kind === 'stations' && zoneCities(z) && zoneCities(z).includes(c.code))) return;   // ville déjà couverte
+      if(origins.some(o => o.c === c.code)) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code]}));
     });
     if(made.length) fitTo(made.reduce((b, z) => b.add(zoneBounds(z)), new BB()).pad(.2));
-    toast(made.length ? `Un trajet par ville (${made.map(z => z.name.replace('Gares de ', '')).join(', ')}) : réglez chacun ci-dessous${sansGare.length ? ` · centre-ville pour ${sansGare.slice(0, 3).join(', ')}` : ''}` : 'Chaque ville a déjà son trajet');
+    toast(made.length ? `Un trajet par ville : réglez chacun, ou cochez plusieurs villes dans un trajet pour l'appliquer à toutes${sansGare.length ? ` · centre-ville pour ${sansGare.slice(0, 3).join(', ')}` : ''}` : 'Chaque ville a déjà son trajet');
   } catch(_) { toast('Recherche des gares impossible pour le moment'); }
   finally { btn.textContent = '🚉 Gares de mes villes'; btn.disabled = !cities.length; }
 };
@@ -1992,7 +2016,7 @@ function cityGroup(l){                                // ville choisie à laquel
   return c ? (c.main ? c.code : c.parent) : null;
 }
 function renderTripCities(){
-  const box = $('#tripCities'); box.hidden = !zones.some(z => !z.city) || cities.length < 2;
+  const box = $('#tripCities'); box.hidden = true;      // remplacé par le choix des villes dans chaque trajet
   if(box.hidden) return;
   box.querySelector('.chips').innerHTML = cities.map(c => { const on = !tripOff.includes(c.code);
     return `<label class="${on ? '' : 'off'}" title="${on ? 'Le trajet est exigé pour' : 'Pas de critère de trajet pour'} ${esc(c.name)}${c.nb ? ' et ses voisines' : ''}"><input type="checkbox" data-code="${c.code}" ${on ? 'checked' : ''}>${esc(c.name)}${c.nb ? ' <small>+ voisines</small>' : ''}</label>`; }).join('');
@@ -2005,7 +2029,7 @@ $('#tripCities').addEventListener('change', e => {
 // trajets qui s'appliquent à une annonce : ceux de sa ville, et les destinations communes (sauf ville décochée)
 function zonesFor(l){
   const g = cityGroup(l);
-  return zones.filter(z => !z.off && (z.city ? z.city === g : !tripOff.includes(g)));
+  return zones.filter(z => !z.off && (!zoneCities(z) || zoneCities(z).includes(g)));
 }
 function inArea(l){
   if(!zones.length) return true;
@@ -2983,7 +3007,7 @@ showTab(store.get('tab', 'search'));
 for(const k of Object.keys(favs)) if(/^\d+$/.test(k)) delete favs[k];   // favoris des annonces fictives de la version d'essai
 store.set('favs', favs);
 const saved = store.get('zones', null);
-if(saved && saved.length) saved.forEach(z => { if(!z.origins) z = {id:z.id, name:z.name, color:z.color, kind:'point', origins:[{lat:z.lat, lng:z.lng, name:z.name}], legs:[{mode:z.mode, min:z.min}]}; if(!z.opts) z.opts = [z.legs]; delete z.legs; zones.push(z); zoneSeq = Math.max(zoneSeq, z.id); });
+if(saved && saved.length) saved.forEach(z => { if(!z.origins) z = {id:z.id, name:z.name, color:z.color, kind:'point', origins:[{lat:z.lat, lng:z.lng, name:z.name}], legs:[{mode:z.mode, min:z.min}]}; if(!z.opts) z.opts = [z.legs]; delete z.legs; if(z.city && !z.cities){ z.cities = [z.city]; } delete z.city; zones.push(z); zoneSeq = Math.max(zoneSeq, z.id); });
 renderCityChips(); if(cities.length) updateCommunes();
 setTheme(THEME);
 $('#themeBtn').onclick = () => setTheme(THEME === 'dark' ? 'light' : 'dark');

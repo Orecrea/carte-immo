@@ -159,6 +159,6 @@ rep("  if(!cities.some(c => c.code === p.citycode)) cities.push({code:p.citycode
 rep("renderCityChips(); if(cities.length) updateCommunes();", (HERE / 'fin.js').read_text())
 
 assert not re.search(r'\bL\.[a-zA-Z]', s.split('<script>', 1)[1]), re.findall(r'.{60}\bL\.[a-zA-Z].{30}', s)
-s = s.replace('<title>Carte immo</title>', '<title>Carte immo (test)</title>')
+if 'beta' in DST.name: s = s.replace('<title>Carte immo</title>', '<title>Carte immo (test)</title>')
 DST.write_text(s)
 print('ok', len(s))
