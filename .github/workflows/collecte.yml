@@ -2,10 +2,10 @@ name: Collecte des annonces
 
 on:
   schedule:
-    # 10 h, 14 h et 20 h heure de Paris : GitHub ne connaît que l'heure UTC,
+    # 10 h 17, 14 h 17 et 20 h 17 heure de Paris (GitHub saute souvent les tâches prévues à l'heure pile) : GitHub ne connaît que l'heure UTC,
     # donc une ligne pour l'heure d'été, une pour l'heure d'hiver ; l'étape « Heure » ne garde que la bonne.
-    - cron: '0 8,12,18 * * *'    # heure d'été (UTC+2)
-    - cron: '0 9,13,19 * * *'    # heure d'hiver (UTC+1)
+    - cron: '17 8,12,18 * * *'    # heure d'été (UTC+2)
+    - cron: '17 9,13,19 * * *'    # heure d'hiver (UTC+1)
   workflow_dispatch:          # bouton « Run workflow » sur GitHub
   issues:
     types: [opened]           # bouton « Actualiser » de la carte
@@ -41,8 +41,8 @@ jobs:
           if [ -n "$PROG" ]; then
             ete=$([ "$(TZ=Europe/Paris date +%z)" = "+0200" ] && echo 1 || echo 0)
             case "$PROG" in
-              '0 8,12,18 * * *') [ "$ete" = 1 ] || ok=0 ;;
-              '0 9,13,19 * * *') [ "$ete" = 0 ] || ok=0 ;;
+              '17 8,12,18 * * *') [ "$ete" = 1 ] || ok=0 ;;
+              '17 9,13,19 * * *') [ "$ete" = 0 ] || ok=0 ;;
             esac
           fi
           echo "ok=$ok" >> "$GITHUB_OUTPUT"
