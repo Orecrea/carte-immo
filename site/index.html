@@ -1965,7 +1965,7 @@ $('#matchMode').onchange = e => { F.match = e.target.value; renderListings(); };
 /* « Gares de mes villes » : toutes les gares des villes choisies (et de leurs communes limitrophes si cochées) */
 async function topUpStations(){
   const zs = zones.filter(z => z.kind === 'stations'); if(!zs.length || !activeCommunes.length) return;
-  zs.forEach(z => { if(z.srcV !== 2){ z.src = []; z.srcV = 2; } });   // v2 (24/11) : arrêts de tram et toutes les stations de métro / RER relus
+  zs.forEach(z => { if(z.srcV !== 3){ z.src = []; z.srcV = 3; } });   // v3 (24/11) : stations d'Île-de-France relues dans les données IDFM
   const miss = activeCommunes.filter(c => zs.some(z => !z.src.includes(c.code)));
   if(!miss.length) return;
   const res = await Promise.all(miss.map(c => stationsOf(c.code).catch(() => null)));
@@ -1973,6 +1973,7 @@ async function topUpStations(){
   zs.forEach(z => {
     miss.forEach((c, i) => {
       if(z.src.includes(c.code) || !res[i]) return;
+      if(res[i].length){ const n = z.origins.length; z.origins = z.origins.filter(o => !(/^Centre de /.test(o.name || '') && inGeom(o.lng, o.lat, c.geom))); added += n - z.origins.length; }   // gares trouvées : plus besoin du centre-ville
       res[i].forEach(s => { if(!z.origins.some(o => kmDist(o.lat, o.lng, s.lat, s.lng) < .3)){ z.origins.push({lat:s.lat, lng:s.lng, name:s.name}); added++; } });
       z.src.push(c.code);
     });
@@ -2002,7 +2003,7 @@ $('#allStations').onclick = async () => {
     const made = [];
     cities.forEach(c => {
       if(zones.some(z => z.kind === 'stations' && zoneCities(z) && zoneCities(z).includes(c.code))) return;   // ville déjà couverte
-      if(origins.some(o => originCities(o).includes(c.code))) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code], src, srcV:2}));
+      if(origins.some(o => originCities(o).includes(c.code))) made.push(addZone(0, 0, 'Trajet ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:JSON.parse(JSON.stringify(origins)), cities:[c.code], src, srcV:3}));
     });
     if(made.length) fitTo(made.reduce((b, z) => b.add(zoneBounds(z)), new BB()).pad(.2));
     toast(made.length ? `Un trajet par ville : réglez chacun, ou cochez plusieurs villes dans un trajet pour l'appliquer à toutes${sansGare.length ? ` · centre-ville pour ${sansGare.slice(0, 3).join(', ')}` : ''}` : 'Chaque ville a déjà son trajet');
