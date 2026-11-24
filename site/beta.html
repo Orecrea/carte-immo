@@ -130,8 +130,23 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
   .spin{width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .dest-row{display:flex;gap:8px;margin-bottom:10px}
-  .opt+.opt{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
-  .opt-h{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px}
+  .opt{background:var(--bg);border-radius:10px;padding:8px 10px 6px;border:1px solid var(--line)}
+  .opt-h{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;gap:6px}
+  .opt-h .sum{font-weight:600;color:var(--muted);font-size:11.5px;margin-left:auto}
+  .opt .leg{border-top:0;margin-top:0;padding-top:0;position:relative}
+  .opt .leg+.leg{margin-top:6px;padding-top:16px}
+  .opt .leg+.leg::before{content:"+";position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:var(--c);color:#fff;font-weight:700;font-size:14px;line-height:20px;text-align:center}
+  .or-sep{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+  .or-sep::before,.or-sep::after{content:"";flex:1;border-top:1px solid var(--line)}
+  .trip-cities{margin:0 0 10px;font-size:12.5px;color:var(--muted)}
+  .zone-on{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin-left:auto;cursor:pointer;flex-shrink:0}
+  .zone-on input{accent-color:var(--c);margin:0}
+  .zone.off{opacity:.55}
+  .zone-for{font-size:12px;color:var(--muted);margin:-4px 0 8px}
+  .trip-cities .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .trip-cities label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 8px;background:var(--panel);color:var(--text);cursor:pointer;font-size:12.5px}
+  .trip-cities label.off{color:var(--faint);background:var(--bg);text-decoration:line-through}
+  .trip-cities input{accent-color:var(--accent);margin:0}
   .link.addl{display:block;margin-top:8px;font-size:12.5px;text-align:left}
   .dest-row .dest{flex:1;margin:0}
   .btn-gares{height:40px;border-radius:10px;white-space:nowrap}
@@ -300,7 +315,9 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
   .fact small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600}
   .fact b{font-size:16px}
   .dpe{display:inline-block;width:26px;text-align:center;color:#fff;border-radius:5px;font-weight:700}
-  .m-desc{color:#3a4152;margin:0 0 18px;white-space:pre-line;max-height:16em;overflow:auto}
+  .m-desc{color:#3a4152;margin:0;white-space:pre-line;height:16em;min-height:6em;overflow:auto;resize:vertical;padding-right:6px}
+  .m-desc.full{height:auto;resize:none}
+  .m-desc-more{margin:6px 0 18px;font-size:13px;font-weight:600}
   .hist{margin-top:8px;font-size:12.5px;color:#0f766e;background:#e8f6f3;border-radius:8px;padding:6px 9px;line-height:1.4}
   .approx{font-size:12px;color:var(--faint)}
   .tag.drop{background:#0f766e;color:#fff}
@@ -460,7 +477,8 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
     .m-price{font-size:26px}
     .m-title{font-size:17px}
     .facts{grid-template-columns:repeat(2,1fr);margin:14px 0}
-    .m-desc{max-height:none}
+    .m-desc{height:auto;resize:none}
+    .m-desc-more{display:none}
     .m-actions{position:sticky;bottom:0;background:var(--panel);margin:16px -16px 0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -4px 12px rgba(16,24,40,.08)}
     .m-actions a,.m-actions button{min-width:0;flex:1 1 100%;padding:12px}
     .m-actions .ghost#centerOn{display:none}
@@ -668,8 +686,9 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
             <input id="dest" placeholder="Gare ou adresse" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="destSug">
             <div class="suggest" id="destSug" role="listbox"></div>
           </div>
-          <button class="btn btn-gares" id="allStations" title="Toutes les gares des villes choisies en haut de page" disabled>🚉 Gares de mes villes</button>
+          <button class="btn btn-gares" id="allStations" title="Un trajet par ville choisie, au départ de ses gares (et de celles de ses voisines)" disabled>🚉 Gares de mes villes</button>
         </div>
+        <div class="trip-cities" id="tripCities" hidden>Destinations communes (📍) appliquées à :<div class="chips"></div></div>
         <div id="zones"></div>
         <div class="match" id="matchBox">Afficher les maisons situées
           <select id="matchMode" aria-label="Règle des trajets"><option value="any">près d'au moins une destination</option><option value="all">près de toutes les destinations</option></select>
@@ -1457,7 +1476,7 @@ function loadNearby(l){
   const q = `[out:json][timeout:20];(node["highway"="bus_stop"]${a(600)};node["railway"~"^(station|halt|tram_stop)$"]${a(2000)};`
           + `nwr["shop"~"^(supermarket|convenience|bakery)$"]${a(2000)};nwr["amenity"="pharmacy"]${a(2000)};`
           + `way["leisure"="park"]${a(1500)};nwr["leisure"~"^(sports_centre|swimming_pool|playground)$"]${a(1500)};);out center 400;`;
-  const ORDER = ['Arrêt de bus','Gare','Métro','Tram','École maternelle','École primaire','Collège','Lycée','Boulangerie','Supérette','Supermarché','Pharmacie','Parc','Aire de jeux','Centre sportif','Piscine'];
+  const ORDER = ['Arrêt de bus','Gare','Métro','Tram','École maternelle','École primaire','Collège','Lycée général','Lycée pro','Boulangerie','Supérette','Supermarché','Pharmacie','Parc','Aire de jeux','Centre sportif','Piscine'];
   const fmtD = d => d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km';
   const fmtT = d => d <= 2500 ? `${Math.max(1, Math.round(d / 80))} min à pied` : `${Math.round(d * 1.3 / 1000 / 25 * 60)} min en voiture environ`;
   const row = x => `<li>${x.info.icon === '●' ? `<span style="color:${x.info.color}">●</span>` : x.info.icon} ${x.info.type}${x.name ? ' ' + esc(x.name) : ''} — ${fmtD(x.d)} (${fmtT(x.d)})</li>`;
@@ -1471,18 +1490,25 @@ function loadNearby(l){
                                : pending ? '<li style="color:var(--muted)">Recherche des écoles, commerces et transports…</li>' : '<li>Aucun équipement trouvé à proximité</li>';
   };
   // écoles : l'établissement le plus proche de chaque niveau, toujours (annuaire de l'Éducation nationale)
-  const ED = 'https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-annuaire-education/records?select=nom_etablissement,type_etablissement,libelle_nature,statut_public_prive,position';
+  const ED = 'https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-annuaire-education/records?select=nom_etablissement,type_etablissement,libelle_nature,statut_public_prive,position,voie_generale,voie_professionnelle';
   const edQuery = (type, km, n) => fetch(`${ED}&limit=${n}&where=${encodeURIComponent(`within_distance(position, geom'POINT(${l.lng} ${l.lat})', ${km}km) and type_etablissement="${type}"`)}`).then(r => r.json()).then(j => j.results || []);
-  const niveaux = [['Ecole', 2, 100], ['Collège', 6, 50], ['Lycée', 10, 50]];
-  Promise.all(niveaux.map(async ([type, km, n]) => { let r = await edQuery(type, km, n); if(!r.length) r = await edQuery(type, 25, n); return r; }))
+  const niveaux = [['Ecole', 2, 100], ['Collège', 6, 50], ['Lycée', 10, 100]];
+  const general = r => r.voie_generale === '1' || /GENERAL|POLYVALENT/i.test(r.libelle_nature || '');
+  Promise.all(niveaux.map(async ([type, km, n]) => {
+    let r = await edQuery(type, km, n);
+    if(!r.length || (type === 'Lycée' && !r.some(general))) r = await edQuery(type, 25, n);   // lycée général parfois plus loin
+    return r; }))
     .then(lists => {
       lists.flat().forEach(r => {
         if(!r.position) return;
         const t = {amenity:'school', name:r.nom_etablissement, nature:r.libelle_nature || r.type_etablissement, prive:r.statut_public_prive === 'Privé'};
-        let info = poiInfo('ecoles', t); const base = info.type.replace(' (privé)', '');
+        let info = poiInfo('ecoles', t); let base = info.type.replace(' (privé)', '');
+        if(base === 'Lycée'){ base = general(r) ? 'Lycée général' : 'Lycée pro'; info = {...info, type:info.type.replace('Lycée', base)}; }
         const d = distM([l.lat, l.lng], [r.position.lat, r.position.lon]);
         if(!best[base] || d < best[base].d) best[base] = {d, info, name:t.name};
       });
+      // lycée pro : affiché seulement s'il est plus proche que le lycée général
+      if(best['Lycée pro'] && best['Lycée général'] && best['Lycée pro'].d >= best['Lycée général'].d) delete best['Lycée pro'];
     }).catch(() => {}).finally(() => { pending--; paint(); });
   overpass(q).then(j => {
     j.elements.forEach(e => {
@@ -1564,7 +1590,7 @@ function hideToast(){ $('#toast').classList.remove('show'); }
 let zones = [], addMode = false, zoneSeq = 0;
 const speed = m => MODES[m].kmh * (m === 'walk' ? 1 : 0.8);                 // km/h, 0,8 = détours et attentes
 const estMin = (km, m) => Math.max(1, Math.round(km / speed(m) * 60));
-function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts}) => ({id, name, color, kind, origins, opts}))); }
+function saveZones(){ store.set('zones', zones.map(({id, name, color, kind, origins, opts, city, off}) => ({id, name, color, kind, origins, opts, city, off}))); }
 const legsRadius = legs => legs.reduce((r, g) => r + speed(g.mode) * g.min / 60 * 1000, 0);
 function approxRadius(z){ return Math.max(...z.opts.map(legsRadius)); }
 function nearestOrigin(z, l){ let best = null; z.origins.forEach(o => { const d = distM([o.lat, o.lng], [l.lat, l.lng]); if(!best || d < best.d) best = {o, d}; }); return best; }
@@ -1572,7 +1598,7 @@ function zoneContains(z, l){
   if(z.poly) return inGeom(l.lng, l.lat, z.poly);
   return nearestOrigin(z, l).d <= approxRadius(z);            // en attendant le calcul
 }
-function zoneHits(l){ return zones.filter(z => zoneContains(z, l)); }
+function zoneHits(l){ return (typeof zonesFor === 'function' ? zonesFor(l) : zones).filter(z => zoneContains(z, l)); }
 const legsLabel = z => z.opts.map(legs => legs.map(g => `${MODES[g.mode].icon} ${g.min}`).join(' + ') + ' min').join(' ou ');
 function clusterOrigins(origins){   // départs éloignés (villes différentes) : calculés séparément, plus rapide et plus fiable
   const groups = [];
@@ -1802,26 +1828,29 @@ function renderZoneList(){
   if(!zones.length){
     el.innerHTML = `<div class="zone-empty">Choisissez une gare ou une adresse, ou « Gares de mes villes » pour partir de toutes les gares des villes sélectionnées. Seules les maisons à moins du temps choisi s'afficheront.</div>`;
   } else el.innerHTML = zones.map(z => `
-    <div class="zone" style="--c:${z.color}" data-id="${z.id}">
+    <div class="zone${z.off ? ' off' : ''}" style="--c:${z.color}" data-id="${z.id}">
       <div class="zone-head">
         <button class="zone-name" data-focus title="Centrer la carte sur ce périmètre">${z.kind === 'stations' ? '🚉' : '📍'} ${esc(z.name)}</button>
+        <label class="zone-on" title="${z.off ? 'Critère désactivé : les maisons ne sont pas filtrées' : 'Critère actif'}"><input type="checkbox" data-on ${z.off ? '' : 'checked'}><span>${z.off ? 'Désactivé' : 'Actif'}</span></label>
         <button class="icon-btn" data-del aria-label="Supprimer ${esc(z.name)}">×</button>
       </div>
-      ${z.opts.map((legs, oi) => `<div class="opt" data-opt="${oi}">
-        ${z.opts.length > 1 ? `<div class="opt-h"><span>${oi === 0 ? 'Possibilité 1' : 'ou possibilité ' + (oi + 1)}</span><button class="icon-btn" data-rmopt aria-label="Retirer cette possibilité">×</button></div>` : ''}
+      ${z.kind === 'stations' && !z.city && cities.length > 1 ? '<button class="link addl" data-split style="margin:-4px 0 8px">↔ Régler ce trajet ville par ville</button>' : ''}
+      ${z.city ? `<div class="zone-for">S'applique aux maisons de ${esc((cities.find(c => c.code === z.city) || {}).name || 'cette ville')}${(cities.find(c => c.code === z.city) || {}).nb ? ' et de ses voisines' : ''}</div>` : ''}
+      ${z.opts.map((legs, oi) => `${oi ? '<div class="or-sep">OU</div>' : ''}<div class="opt" data-opt="${oi}">
+        ${z.opts.length > 1 || legs.length > 1 ? `<div class="opt-h"><span>${z.opts.length > 1 ? 'Trajet ' + (oi + 1) : 'Trajet'}</span><span class="sum">${legs.length > 1 ? legs.map(g => MODES[g.mode].icon + ' ' + g.min).join(' + ') + ' = ' + legs.reduce((t, g) => t + g.min, 0) + ' min au total' : ''}</span>${z.opts.length > 1 ? '<button class="icon-btn" data-rmopt aria-label="Retirer ce trajet">×</button>' : ''}</div>` : ''}
         ${legs.map((g, i) => `
         <div class="leg" data-leg="${i}">
-          ${legs.length > 1 ? `<div class="leg-h"><span>${i === 0 ? 'Étape 1' : 'puis étape ' + (i + 1)}</span><button class="icon-btn" data-rmleg aria-label="Retirer l'étape">×</button></div>` : ''}
+          ${legs.length > 1 ? `<div class="leg-h"><span>Étape ${i + 1}</span><button class="icon-btn" data-rmleg aria-label="Retirer l'étape">×</button></div>` : ''}
           <div class="seg" role="radiogroup" aria-label="Mode de trajet">${Object.entries(MODES).map(([k, m]) =>
             `<button role="radio" aria-checked="${g.mode === k}" data-mode="${k}" class="${g.mode === k ? 'on' : ''}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
           <div class="time"><input type="range" min="5" max="60" step="5" value="${g.min}" data-time aria-label="Durée de l'étape"><output>${g.min} min</output></div>
         </div>`).join('')}
-        ${legs.length < 3 ? '<button class="link addl" data-addleg>+ puis une autre étape (ex. 5 min à pied puis 10 min de transports)</button>' : ''}
+        ${legs.length < 3 ? '<button class="link addl" data-addleg>+ ajouter une étape à ce trajet (ex. 5 min à pied + 10 min de transports)</button>' : ''}
       </div>`).join('')}
-      ${z.opts.length < 3 ? '<button class="link addl" data-addopt>+ ou une autre façon d\'y aller (ex. 10 min à vélo ou 5 min de transports)</button>' : ''}
+      ${z.opts.length < 3 ? '<button class="link addl" data-addopt>+ ou un autre trajet possible (ex. 10 min à vélo OU 5 min de transports)</button>' : ''}
       <div class="zstatus"></div>
     </div>`).join('');
-  zones.forEach(renderZoneStatus);
+  zones.forEach(renderZoneStatus); renderTripCities();
   $('#matchBox').style.display = zones.length > 1 ? '' : 'none';
 }
 $('#zones').addEventListener('click', e => {
@@ -1838,11 +1867,36 @@ $('#zones').addEventListener('click', e => {
   else if(btn.hasAttribute('data-rmopt')){ z.opts.splice(+optEl.dataset.opt, 1); renderZoneList(); saveZones(); scheduleCompute(z, 50); }
   else if(btn.hasAttribute('data-addopt')){ z.opts.push([{mode:'bike', min:10}]); renderZoneList(); saveZones(); scheduleCompute(z, 50); }
   else if(btn.hasAttribute('data-focus')) fitTo(zoneBounds(z).pad(.1), {duration:600});
+  else if(btn.hasAttribute('data-split')) splitByCity(z);
 });
+$('#zones').addEventListener('change', e => {
+  if(!e.target.hasAttribute('data-on')) return;
+  const z = zones.find(x => x.id == e.target.closest('.zone').dataset.id);
+  z.off = !e.target.checked; drawZones(); renderZoneList(); renderListings(); saveZones();
+});
+// un trajet « gares de mes villes » commun → un trajet par ville, chacun réglable à part
+function cityOfPoint(lat, lng){
+  const c = activeCommunes.find(c => inGeom(lng, lat, c.geom));
+  if(c) return c.main ? c.code : c.parent;
+  let best = null; cities.forEach(c => { const d = kmDist(lat, lng, c.lat, c.lng); if(!best || d < best.d) best = {c, d}; });
+  return best ? best.c.code : null;
+}
+function splitByCity(z){
+  const groups = {};
+  z.origins.forEach(o => { const k = cityOfPoint(o.lat, o.lng); if(k) (groups[k] = groups[k] || []).push(o); });
+  const i = zones.indexOf(z); zones.splice(i, 1);
+  Object.entries(groups).forEach(([code, origins]) => {
+    const c = cities.find(x => x.code === code); if(!c) return;
+    addZone(0, 0, 'Gares de ' + c.name, JSON.parse(JSON.stringify(z.opts[0])), {kind:'stations', origins, city:code, opts:JSON.parse(JSON.stringify(z.opts))});
+  });
+  toast('Un trajet par ville : réglez chacun comme vous voulez');
+}
 $('#zones').addEventListener('input', e => {
   if(!e.target.hasAttribute('data-time')) return;
   const z = zones.find(x => x.id == e.target.closest('.zone').dataset.id), leg = z.opts[+e.target.closest('.opt').dataset.opt][+e.target.closest('.leg').dataset.leg];
   leg.min = +e.target.value; e.target.nextElementSibling.textContent = leg.min + ' min';
+  const legs = z.opts[+e.target.closest('.opt').dataset.opt], sum = e.target.closest('.opt').querySelector('.sum');
+  if(sum && legs.length > 1) sum.textContent = legs.map(g => MODES[g.mode].icon + ' ' + g.min).join(' + ') + ' = ' + legs.reduce((t, g) => t + g.min, 0) + ' min au total';
   saveZones(); scheduleCompute(z);
 });
 $('#matchMode').value = F.match;
@@ -1866,10 +1920,15 @@ $('#allStations').onclick = async () => {
       }
     });
     if(!origins.length){ toast('Aucune gare trouvée dans ces villes'); return; }
-    const name = 'Gares de mes villes (' + cities.map(c => c.name).join(', ') + ')';
-    const z = addZone(0, 0, name, [{mode:'walk', min:10}], {kind:'stations', origins});
-    fitTo(zoneBounds(z).pad(.2));
-    toast(`${origins.length} point${origins.length > 1 ? 's' : ''} de départ dans ${list.length} commune${list.length > 1 ? 's' : ''}${sansGare.length ? ` (centre-ville pour ${sansGare.slice(0, 3).join(', ')}${sansGare.length > 3 ? '…' : ''})` : ''}. Réglez le trajet ci-dessous.`);
+    // un trajet par ville choisie (avec les gares de ses voisines) : chacun se règle à part
+    const made = [];
+    cities.forEach(c => {
+      if(zones.some(z => z.city === c.code)) return;           // déjà créé : on le garde tel quel
+      const mine = origins.filter(o => cityOfPoint(o.lat, o.lng) === c.code);
+      if(mine.length) made.push(addZone(0, 0, 'Gares de ' + c.name, [{mode:'walk', min:10}], {kind:'stations', origins:mine, city:c.code}));
+    });
+    if(made.length) fitTo(made.reduce((b, z) => b.add(zoneBounds(z)), new BB()).pad(.2));
+    toast(made.length ? `Un trajet par ville (${made.map(z => z.name.replace('Gares de ', '')).join(', ')}) : réglez chacun ci-dessous${sansGare.length ? ` · centre-ville pour ${sansGare.slice(0, 3).join(', ')}` : ''}` : 'Chaque ville a déjà son trajet');
   } catch(_) { toast('Recherche des gares impossible pour le moment'); }
   finally { btn.textContent = '🚉 Gares de mes villes'; btn.disabled = !cities.length; }
 };
@@ -1927,10 +1986,32 @@ function passCriteria(l){
   return (F.pmax == null || l.price <= F.pmax) && ok(l.chambres, F.beds) && (F.smin == null || ok(l.surf, F.smin))
       && (F.tmin == null || ok(l.terrain, F.tmin)) && ok(l.pieces, F.rooms) && (!l.dpe || DPE.indexOf(l.dpe) <= DPE.indexOf(F.dpe)) && l.days <= F.age;
 }
+let tripOff = store.get('tripOff', []);              // villes où le critère de trajet ne s'applique pas
+function cityGroup(l){                                // ville choisie à laquelle appartient l'annonce (elle-même ou une de ses voisines)
+  const c = activeCommunes.find(c => c.code === l.insee) || activeCommunes.find(c => inGeom(l.lng, l.lat, c.geom));
+  return c ? (c.main ? c.code : c.parent) : null;
+}
+function renderTripCities(){
+  const box = $('#tripCities'); box.hidden = !zones.some(z => !z.city) || cities.length < 2;
+  if(box.hidden) return;
+  box.querySelector('.chips').innerHTML = cities.map(c => { const on = !tripOff.includes(c.code);
+    return `<label class="${on ? '' : 'off'}" title="${on ? 'Le trajet est exigé pour' : 'Pas de critère de trajet pour'} ${esc(c.name)}${c.nb ? ' et ses voisines' : ''}"><input type="checkbox" data-code="${c.code}" ${on ? 'checked' : ''}>${esc(c.name)}${c.nb ? ' <small>+ voisines</small>' : ''}</label>`; }).join('');
+}
+$('#tripCities').addEventListener('change', e => {
+  const code = e.target.dataset.code; if(!code) return;
+  tripOff = e.target.checked ? tripOff.filter(x => x !== code) : [...tripOff, code];
+  store.set('tripOff', tripOff); renderTripCities(); renderListings();
+});
+// trajets qui s'appliquent à une annonce : ceux de sa ville, et les destinations communes (sauf ville décochée)
+function zonesFor(l){
+  const g = cityGroup(l);
+  return zones.filter(z => !z.off && (z.city ? z.city === g : !tripOff.includes(g)));
+}
 function inArea(l){
   if(!zones.length) return true;
-  const n = zoneHits(l).length;
-  return F.match === 'all' ? n === zones.length : n > 0;
+  const zs = zonesFor(l); if(!zs.length) return true;
+  const n = zs.filter(z => zoneContains(z, l)).length;
+  return F.match === 'all' ? n === zs.length : n > 0;
 }
 
 /* =========================================================
@@ -2228,7 +2309,7 @@ function openListing(l, list){
         <div class="fact"><small>Construction</small><b>${l.year || '—'}</b></div>
         <div class="fact"><small>DPE / GES</small><b>${l.dpe ? `<span class="dpe" style="background:${DPE_COL[l.dpe]}">${l.dpe}</span>` : '—'} ${l.ges ? `<span class="dpe" style="background:${DPE_COL[l.ges]}">${l.ges}</span>` : ''}</b></div>
       </div>
-      <p class="m-desc">${desc}</p>
+      <p class="m-desc" id="mDesc">${desc}</p><button class="link m-desc-more" id="mDescMore" hidden>Lire toute la description ▾</button>
       <div class="m-cols">
         <div>
           <h3>Atouts repérés</h3><ul>${(l.atouts || []).length ? l.atouts.map(a => `<li>${esc(a)}</li>`).join('') : '<li style="color:var(--muted)">Aucun mot-clé repéré dans l\'annonce</li>'}</ul>
@@ -2261,6 +2342,9 @@ function openListing(l, list){
   car.ontouchstart = e => x0 = e.touches[0].clientX;
   car.ontouchend = e => { if(x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if(Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; };
   loadNearby(l);
+  const md = $('#mDesc'), mm = $('#mDescMore');
+  if(md && mm){ requestAnimationFrame(() => { mm.hidden = md.scrollHeight <= md.clientHeight + 4; });
+    mm.onclick = () => { const f = md.classList.toggle('full'); mm.textContent = f ? 'Réduire la description ▴' : 'Lire toute la description ▾'; if(!f) md.scrollTop = 0; }; }
 }
 function renderNote(){
   const box = $('#noteBox'); if(!box || !current) return;
@@ -2407,6 +2491,7 @@ function paintCitiesBtn(){
   $('#citiesSum').textContent = `${CITY_TOTAL} maison${CITY_TOTAL > 1 ? 's' : ''} avec vos critères`;
 }
 function renderCityChips(){
+  if(typeof renderTripCities === 'function') renderTripCities();
   $('#cityChips').innerHTML = cities.map(c => {
     const nbs = activeCommunes.filter(x => !x.main && x.parent === c.code).length;
     return `<div class="crow" style="--cc:${c.col}">
