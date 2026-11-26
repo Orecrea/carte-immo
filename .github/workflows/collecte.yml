@@ -2,10 +2,11 @@ name: Collecte des annonces
 
 on:
   schedule:
-    # 10 h 17, 14 h 17 et 20 h 17 heure de Paris (GitHub saute souvent les tâches prévues à l'heure pile) : GitHub ne connaît que l'heure UTC,
-    # donc une ligne pour l'heure d'été, une pour l'heure d'hiver ; l'étape « Heure » ne garde que la bonne.
-    - cron: '17 8,12,18 * * *'    # heure d'été (UTC+2)
-    - cron: '17 9,13,19 * * *'    # heure d'hiver (UTC+1)
+    # GitHub déclenche ses tâches planifiées avec des heures de retard, et en saute beaucoup (constaté les 24 et 25/11 :
+    # seule celle du soir passait). On frappe donc toutes les 30 min, et l'étape « Heure » ne lance la collecte que si
+    # le dernier rendez-vous (10 h, 14 h ou 20 h heure de Paris) n'a pas encore eu sa collecte : un rendez-vous raté
+    # est rattrapé dans la demi-heure.
+    - cron: '7,37 * * * *'
   workflow_dispatch:          # bouton « Run workflow » sur GitHub
   issues:
     types: [opened]           # bouton « Actualiser » de la carte
@@ -35,7 +36,6 @@ jobs:
       - name: Heure
         id: heure
         env:
-          PROG: ${{ github.event.schedule }}
           EVT: ${{ github.event_name }}
           REPO: ${{ github.repository }}
           AVANT: ${{ github.event.before }}
@@ -43,19 +43,38 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ok=1
-          if [ -n "$PROG" ]; then
-            ete=$([ "$(TZ=Europe/Paris date +%z)" = "+0200" ] && echo 1 || echo 0)
-            case "$PROG" in
-              '17 8,12,18 * * *') [ "$ete" = 1 ] || ok=0 ;;
-              '17 9,13,19 * * *') [ "$ete" = 0 ] || ok=0 ;;
-            esac
+          if [ "$EVT" = schedule ]; then
+            ok=$(python3 - <<'PY'
+          import base64, json, os, subprocess
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
+          paris = ZoneInfo("Europe/Paris"); now = datetime.now(paris)
+          rdv = [now.replace(hour=h, minute=0, second=0, microsecond=0) - timedelta(days=d) for d in (0, 1) for h in (10, 14, 20)]
+          dernier = max(r for r in rdv if r <= now)
+          api = lambda chemin: subprocess.run(["gh", "api", f"repos/{os.environ['REPO']}/{chemin}"], capture_output=True, text=True).stdout
+          try:
+              fin = datetime.fromisoformat(base64.b64decode(json.loads(api("contents/etat/fin.txt?ref=main"))["content"]).decode().strip())
+          except Exception:
+              fin = None
+          try:
+              maj = datetime.fromisoformat(json.loads(api("commits?path=site/annonces.enc&per_page=1"))[0]["commit"]["committer"]["date"].replace("Z", "+00:00"))
+          except Exception:
+              maj = None
+          if fin and now > fin:
+              print(0)                                   # collecte automatique en pause (plus d'un mois sans Actualiser)
+          elif maj and maj >= dernier:
+              print(0)                                   # ce rendez-vous a déjà eu sa collecte
+          else:
+              print(1)
+          PY
+            )
+            [ "$ok" = 1 ] && echo "Rendez-vous de collecte à rattraper : on y va." || echo "Collecte déjà faite pour ce créneau : rien à faire."
           fi
           echo "ok=$ok" >> "$GITHUB_OUTPUT"
           # envoi de la carte (perso/demande.enc) : on regarde les fichiers vraiment modifiés par ce push
           if [ "$EVT" = push ]; then
             gh api "repos/$REPO/compare/$AVANT...$APRES" --jq '.files[].filename' | grep -qx 'perso/demande.enc' && echo "demande=1" >> "$GITHUB_OUTPUT" || true
           fi
-          [ "$ok" = 1 ] || echo "Pas l'heure de Paris prévue (changement d'heure) : collecte sautée."
       - uses: actions/checkout@v4
         with: {ref: main}
       - uses: actions/setup-python@v5
