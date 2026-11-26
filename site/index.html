@@ -1207,6 +1207,10 @@ function setupLayers(){
   lay({id:'ci-zones-fill', type:'fill', source:'zones', paint:{'fill-color':['get', 'c'], 'fill-opacity':['case', ['==', ['get', 'approx'], 1], .04, .14]}});
   lay({id:'ci-zones-line', type:'line', source:'zones', filter:['!=', ['get', 'approx'], 1], paint:{'line-color':['get', 'c'], 'line-width':2}});
   lay({id:'ci-zones-dash', type:'line', source:'zones', filter:['==', ['get', 'approx'], 1], paint:{'line-color':['get', 'c'], 'line-width':1.5, 'line-dasharray':[2.7, 4]}});
+  // gares de départ des trajets : discrètes, sous les annonces, cachées quand on dézoome
+  src('zone-st');
+  lay({id:'ci-zone-st', type:'circle', source:'zone-st', minzoom:11, paint:{'circle-color':['get', 'c'], 'circle-radius':['interpolate', ['linear'], ['zoom'], 11, 1.8, 13, 3, 16, 5.5],
+       'circle-stroke-color':'#fff', 'circle-stroke-width':['interpolate', ['linear'], ['zoom'], 11, .5, 15, 1.5], 'circle-opacity':['interpolate', ['linear'], ['zoom'], 11, .55, 14, .9], 'circle-stroke-opacity':['interpolate', ['linear'], ['zoom'], 11, .55, 14, .9]}});
   src('poi-lines');
   lay({id:'ci-futur', type:'line', source:'poi-lines', layout:{'line-cap':'butt'}, paint:{'line-color':'#8e44ad', 'line-width':4, 'line-opacity':.8, 'line-dasharray':[2, 1.5]}});
   // transports IDFM (sous les annonces)
@@ -1216,8 +1220,8 @@ function setupLayers(){
   lay({id:'tc-rail-casing', type:'line', source:'tc-rail', layout:{'line-cap':'round', 'line-join':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':'#ffffff', 'line-opacity':.75, 'line-width':['interpolate', ['linear'], ['zoom'], 8, ['+', ['get', 'w'], 1], 14, ['+', ['*', ['get', 'w'], 1.8], 2]]}});
   lay({id:'tc-rail', type:'line', source:'tc-rail', layout:{'line-cap':'round', 'line-join':'round', visibility:TCV ? 'visible' : 'none'}, paint:{'line-color':['get', 'c'], 'line-width':['interpolate', ['linear'], ['zoom'], 8, ['*', ['get', 'w'], .6], 14, ['*', ['get', 'w'], 1.8]]}});
   lay({id:'tc-arrets', type:'circle', source:'tc-arrets', minzoom:14, layout:{visibility:LAYERS.bus.on ? 'visible' : 'none'}, paint:{'circle-radius':3, 'circle-color':'#fff', 'circle-stroke-color':'#e09a1a', 'circle-stroke-width':1.5}});
-  lay({id:'tc-gares', type:'circle', source:'tc-gares', minzoom:10, layout:{visibility:TCV ? 'visible' : 'none'}, paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 10, 2.5, 15, 6], 'circle-color':'#fff', 'circle-stroke-color':'#1b2330', 'circle-stroke-width':['interpolate', ['linear'], ['zoom'], 10, 1.2, 15, 2]}});
-  lay({id:'tc-gares-label', type:'symbol', source:'tc-gares', minzoom:13, layout:{'text-field':['get', 'n'], 'text-font':BOLD, 'text-size':11.5, 'text-offset':[0, 1.1], 'text-anchor':'top', 'text-optional':true, visibility:TCV ? 'visible' : 'none'},
+  lay({id:'tc-gares', type:'circle', source:'tc-gares', minzoom:11, layout:{visibility:TCV ? 'visible' : 'none'}, paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 11, 1.8, 13, 3, 15, 5.5], 'circle-color':'#fff', 'circle-stroke-color':'#1b2330', 'circle-stroke-width':['interpolate', ['linear'], ['zoom'], 11, .8, 15, 2]}});
+  lay({id:'tc-gares-label', type:'symbol', source:'tc-gares', minzoom:14, layout:{'text-field':['get', 'n'], 'text-font':BOLD, 'text-size':11.5, 'text-offset':[0, 1.1], 'text-anchor':'top', 'text-optional':true, visibility:TCV ? 'visible' : 'none'},
        paint:{'text-color':'#1b2330', 'text-halo-color':'#ffffff', 'text-halo-width':1.5}});
   src('poi');
   lay({id:'ci-stops', type:'circle', source:'poi', filter:['==', ['get', 'kind'], 'stop'],
@@ -1848,9 +1852,11 @@ function drawZones(){
     else usedOrigins(z).forEach(o => feats.push({type:'Feature', geometry:circleGeom(o.lat, o.lng, approxRadius(z)), properties:{c:z.color, approx:1}}));
   });
   setSrc('zones', FC(feats));
-  // points de départ : peu nombreux, déplaçables à la main -> marqueurs HTML
+  // gares de départ (souvent des centaines) : couche de la carte, sous les annonces
+  setSrc('zone-st', FC(zones.filter(z => z.kind === 'stations' && !z.off).flatMap(z => usedOrigins(z).map(o => ({type:'Feature', geometry:{type:'Point', coordinates:[o.lng, o.lat]}, properties:{c:z.color}}))))); 
+  // points choisis à la main : peu nombreux, déplaçables -> marqueurs HTML
   zoneMarkers.forEach(m => m.remove()); zoneMarkers = [];
-  zones.forEach(z => usedOrigins(z).forEach(o => {
+  zones.filter(z => z.kind !== 'stations').forEach(z => usedOrigins(z).forEach(o => {
     const el = document.createElement('div'); el.className = 'zone-dot' + (z.kind === 'stations' ? ' st' : ''); el.style.background = z.color;
     el.title = `${o.name || z.name} · ${legsLabel(z)}`;
     const m = new maplibregl.Marker({element:el, draggable:z.kind === 'point'}).setLngLat([o.lng, o.lat]).addTo(map);
