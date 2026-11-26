@@ -3215,7 +3215,22 @@ $('#tcWrap').inert = true;
 if(store.get('env', 'immo') === 'tc') setEnv('tc', true);
 
 refresh(); updateFavCounts(); renderFavs(); loadPoi(); zones.forEach(z => computeZone(z));
-loadData(); resumePolling();
+// GitHub saute souvent ses collectes programmées : si le dernier rendez-vous (10 h, 14 h, 20 h à Paris) n'a pas eu
+// sa collecte, la carte la demande elle-même à l'ouverture (une seule fois par rendez-vous)
+function dernierRdv(){
+  const now = new Date(), p = new Date(now.toLocaleString('en-US', {timeZone:'Europe/Paris'})), dec = p - now;
+  const rdv = [0, 1].flatMap(d => [10, 14, 20].map(h => { const x = new Date(p); x.setDate(x.getDate() - d); x.setHours(h, 0, 0, 0); return x.getTime() - dec; }));
+  return Math.max(...rdv.filter(t => t <= now.getTime()));
+}
+async function rattrapage(){
+  if(!jeton || !KEY || !DATA || DATA.partiel || !cities.length) return;
+  const rdv = dernierRdv();
+  if(new Date(DATA.fin) < new Date() || new Date(DATA.maj).getTime() >= rdv - 60e3 || Date.now() - rdv < 10 * 60e3) return;
+  if(Date.now() - store.get('pending', 0) < pendingWindow() || store.get('rattrapage', 0) === rdv) return;
+  store.set('rattrapage', rdv);
+  if(await sendRequest()) toast(`Collecte de ${new Date(rdv).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', timeZone:'Europe/Paris'})} pas encore faite : lancée maintenant, environ ${collecteMin()} min`);
+}
+loadData().then(() => setTimeout(rattrapage, 4000)); resumePolling(); setInterval(rattrapage, 10 * 60e3);
 document.addEventListener('visibilitychange', () => { if(!document.hidden && DATA && Date.now() - lastLoad > 20 * 60e3) loadData(); });
 </script>
 </body>
