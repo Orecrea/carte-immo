@@ -1,0 +1,39 @@
+Orpi page 1 : 15 annonce(s) lue(s)
+Orpi page 2 : 15 annonce(s) lue(s)
+Orpi page 3 : 15 annonce(s) lue(s)
+Orpi page 4 : 15 annonce(s) lue(s)
+Orpi : 40 maisons ≤ 800 k€ testées, 33 déjà sur Bien'ici, 7 absentes, 0 commune non trouvée
+   208000 € None m² gennevilliers 92230 https://www.orpi.com/annonce-vente-maison-t1-gennevilliers-92230-b0ea8bb5-d4fa-40db-98df-cbeaf8bd0182/
+   250000 € None m² franconville 95130 https://www.orpi.com/annonce-vente-maison-t3-franconville-95130-bc06493e-a215-45f9-abc9-c81876f3d62d/
+   269000 € None m² paris-10 75010 https://www.orpi.com/annonce-vente-maison-t2-paris-10-75010-0413e2af-244e-4915-8804-ba41dc2069e7/
+   286000 € None m² fontenay-sous-bois 94120 https://www.orpi.com/annonce-vente-maison-t2-fontenay-sous-bois-94120-7a72c219-645d-45d6-b837-9d5fd1ee0256/
+   248000 € None m² sucy-en-brie 94370 https://www.orpi.com/annonce-vente-maison-t3-sucy-en-brie-94370-66fe221c-eea0-4672-b82d-910b46c646d3/
+   605000 € None m² bouffemont 95570 https://www.orpi.com/annonce-vente-maison-t6-bouffemont-95570-1cb2815a-b881-47ca-a2b0-a715450a32cc/
+   595000 € None m² domont 95330 https://www.orpi.com/annonce-vente-maison-t5-domont-95330-59f71f37-a22f-401e-89f0-63cc8f47ce7b/
+Laforêt page 1 : 40 annonce(s) lue(s)
+Laforêt page 2 : 40 annonce(s) lue(s)
+Laforêt : 40 maisons ≤ 800 k€ testées, 32 déjà sur Bien'ici, 7 absentes, 1 commune non trouvée
+   435000 € 105 m² LAGNY SUR MARNE 77400 laforet #53045361
+   439000 € 168 m² TOURNAN EN BRIE 77220 laforet #53042368
+   629000 € 130 m² SAINT MAUR DES FOSSES 94210 laforet #53036394
+   269000 € 88 m² ELANCOURT 78990 laforet #53034894
+   249000 € 60 m² LES PAVILLONS SOUS BOIS 93320 laforet #53031061
+   197000 € 54 m² JUZIERS 78820 laforet #53028941
+   387000 € 106 m² SAINT MAUR DES FOSSES 94210 laforet #53028699
+iad page 1 : 30 annonce(s) lue(s)
+iad page 2 : 30 annonce(s) lue(s)
+iad : 40 maisons ≤ 800 k€ testées, 32 déjà sur Bien'ici, 8 absentes, 0 commune non trouvée
+   415000 € 179 m² Le Châtelet-en-Brie 77820 https://www.iadfrance.fr/annonce/maison-vente-6-pieces-le-chatelet-en-brie-179m2/r2168013
+   229000 € 140 m² Villiers-sur-Morin 77580 https://www.iadfrance.fr/annonce/maison-vente-3-pieces-villiers-sur-morin-140m2/r2168268
+   385000 € 149 m² Varreddes 77910 https://www.iadfrance.fr/annonce/maison-vente-7-pieces-varreddes-149m2/r2169116
+   419000 € 128 m² Champcueil 91750 https://www.iadfrance.fr/annonce/maison-vente-6-pieces-champcueil-128m2/r2169336
+   249000 € 52 m² Villeneuve-le-Roi 94290 https://www.iadfrance.fr/annonce/maison-vente-3-pieces-villeneuve-le-roi-52m2/r2166619
+   528000 € 142 m² Montfermeil 93370 https://www.iadfrance.fr/annonce/maison-vente-8-pieces-montfermeil-142m2/r2165963
+   249000 € 261 m² Crégy-lès-Meaux 77124 https://www.iadfrance.fr/annonce/maison-vente-10-pieces-cregy-les-meaux-261m2/r2026883
+   300000 € 70 m² Vitry-sur-Seine 94400 https://www.iadfrance.fr/annonce/maison-vente-4-pieces-vitry-sur-seine-70m2/r2167156
+Lesiteimmo page 1 : 25 annonce(s) lue(s)
+Lesiteimmo page 2 : 25 annonce(s) lue(s)
+Lesiteimmo : 40 maisons ≤ 800 k€ testées, 37 déjà sur Bien'ici, 3 absentes, 0 commune non trouvée
+   300000 € 70 m² vitry-sur-seine 94400 https://www.lesiteimmo.com/acheter/maison-4pieces/vitry-sur-seine-94400/34276976
+   159000 € 76 m² romainville 93230 https://www.lesiteimmo.com/acheter/maison-4pieces/romainville-93230/34276881
+   379000 € 130 m² gambais 78950 https://www.lesiteimmo.com/acheter/maison-5pieces/gambais-78950/34276685
