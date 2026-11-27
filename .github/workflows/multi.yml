@@ -72,7 +72,7 @@ jobs:
         env:
           CLE_CARTE: ${{ secrets.CLE_CARTE }}
           LIMITE_MIN: '170'
-          SANS_COLLECTE: ${{ (github.event_name == 'push' || inputs.rapide) && '1' || '' }}
+          SANS_COLLECTE: ${{ inputs.rapide && '1' || '' }}
         run: python collecte/multi.py manuel
       - name: Enregistrement
         if: steps.multi.outputs.publier == '1'
