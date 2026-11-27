@@ -15,7 +15,7 @@ on:
         default: false
   push:                       # premier passage, depuis la branche de travail (retiré avant la fusion)
     branches: [claude/project-thread-syehho]
-    paths: ['collecte/multi.py', '.github/workflows/multi.yml']
+    paths: ['collecte/multi.py', 'collecte/multi_detect.py', '.github/workflows/multi.yml']
 
 permissions:
   contents: write

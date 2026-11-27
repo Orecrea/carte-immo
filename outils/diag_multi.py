@@ -1,27 +1,15 @@
-"""Diagnostic temporaire : mots exacts qui déclenchent chaque indice (compteurs seulement, aucun texte d'annonce)."""
-import os, re, sys
-from collections import Counter, defaultdict
+"""Diagnostic temporaire : nombre d'annonces retenues par indice (compteurs seulement)."""
+import os, sys
+from collections import Counter
 sys.path.insert(0, "collecte")
 from chiffrement import dechiffrer
-import multi_detect as D
+from multi_detect import analyser
 e = dechiffrer(open("etat/multi.enc").read(), os.environ["CLE_CARTE"])
 annonces = {a["id"]: a for c in e["cache"].values() for a in c.get("annonces", [])}.values()
-mots = defaultdict(Counter)
-ctx = defaultdict(Counter)
+ids, n, fam = Counter(), 0, Counter()
 for a in annonces:
-    t = D.norm((a.get("titre") or "") + ". " + (a.get("desc") or ""))
-    for ident, cat, poids, rx in D.INDICES:
-        m = rx.search(t)
-        if m:
-            mots[ident][re.sub(r"\s+", " ", m.group(0))] += 1
-            # 3 mots avant / après, pour voir le contexte (mots courants seulement)
-            av = " ".join(re.findall(r"[a-z']+", t[max(0, m.start() - 30):m.start()])[-3:])
-            ap = " ".join(re.findall(r"[a-z']+", t[m.end():m.end() + 30])[:3])
-            ctx[ident][av + " [_] " + ap] += 1
-    m = D.SURF_RX.search(t)
+    m = analyser(a.get("titre"), a.get("desc"), a.get("pieces"), a.get("surf"))
     if m:
-        mots["surface"][re.sub(r"\d+", "N", re.sub(r"\s+", " ", m.group(0)))] += 1
-print("annonces distinctes", len(annonces))
-for k in mots:
-    print(k, sum(mots[k].values()), mots[k].most_common(12))
-    print("   contexte", [x for x in ctx[k].most_common(8) if x[1] > 1])
+        n += 1; ids.update(set(m["ids"])); fam.update(m["noms"][:1])
+print("annonces distinctes", len(annonces), "retenues", n)
+print(ids.most_common()); print(fam.most_common())
