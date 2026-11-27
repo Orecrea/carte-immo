@@ -1,20 +1,27 @@
-"""Diagnostic temporaire : fréquence de chaque indice multi-logements sur les annonces déjà lues (compteurs seulement)."""
-import os, sys
-from collections import Counter
+"""Diagnostic temporaire : mots exacts qui déclenchent chaque indice (compteurs seulement, aucun texte d'annonce)."""
+import os, re, sys
+from collections import Counter, defaultdict
 sys.path.insert(0, "collecte")
 from chiffrement import dechiffrer
-from multi_detect import analyser
+import multi_detect as D
 e = dechiffrer(open("etat/multi.enc").read(), os.environ["CLE_CARTE"])
-annonces = [a for c in e["cache"].values() for a in c.get("annonces", [])]
-ids, seul, gardes, cats = Counter(), Counter(), 0, Counter()
+annonces = {a["id"]: a for c in e["cache"].values() for a in c.get("annonces", [])}.values()
+mots = defaultdict(Counter)
+ctx = defaultdict(Counter)
 for a in annonces:
-    m = analyser(a.get("titre"), a.get("desc"), a.get("pieces"), a.get("surf"))
+    t = D.norm((a.get("titre") or "") + ". " + (a.get("desc") or ""))
+    for ident, cat, poids, rx in D.INDICES:
+        m = rx.search(t)
+        if m:
+            mots[ident][re.sub(r"\s+", " ", m.group(0))] += 1
+            # 3 mots avant / après, pour voir le contexte (mots courants seulement)
+            av = " ".join(re.findall(r"[a-z']+", t[max(0, m.start() - 30):m.start()])[-3:])
+            ap = " ".join(re.findall(r"[a-z']+", t[m.end():m.end() + 30])[:3])
+            ctx[ident][av + " [_] " + ap] += 1
+    m = D.SURF_RX.search(t)
     if m:
-        gardes += 1
-        ids.update(set(m["ids"])); cats.update(m["noms"])
-        if len(set(m["ids"])) == 1:
-            seul.update(m["ids"])
-print("annonces", len(annonces), "retenues", gardes)
-print("indices", ids.most_common())
-print("seul indice", seul.most_common())
-print("familles", cats.most_common())
+        mots["surface"][re.sub(r"\d+", "N", re.sub(r"\s+", " ", m.group(0)))] += 1
+print("annonces distinctes", len(annonces))
+for k in mots:
+    print(k, sum(mots[k].values()), mots[k].most_common(12))
+    print("   contexte", [x for x in ctx[k].most_common(8) if x[1] > 1])

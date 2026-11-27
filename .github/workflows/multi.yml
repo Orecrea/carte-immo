@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: '41 */2 * * *'
   workflow_dispatch:          # bouton « Run workflow » sur GitHub : relance la recherche tout de suite
+    inputs:
+      rapide:
+        description: "Sans relire les sites : recalcule seulement le tri à partir des annonces déjà lues"
+        type: boolean
+        default: false
   push:                       # premier passage, depuis la branche de travail (retiré avant la fusion)
     branches: [claude/project-thread-syehho]
     paths: ['collecte/multi.py', '.github/workflows/multi.yml']
@@ -70,6 +75,7 @@ jobs:
         env:
           CLE_CARTE: ${{ secrets.CLE_CARTE }}
           LIMITE_MIN: '170'
+          SANS_COLLECTE: ${{ (github.event_name == 'push' || inputs.rapide) && '1' || '' }}
         run: python collecte/multi.py manuel
       - name: Enregistrement
         if: steps.multi.outputs.publier == '1'

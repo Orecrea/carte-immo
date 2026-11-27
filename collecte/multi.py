@@ -235,8 +235,13 @@ def main():
             return nom, f(communes, log), None
         except Exception as e:
             return nom, None, e
-    with ThreadPoolExecutor(max_workers=len(sources.SOURCES)) as pool:
-        resultats = list(pool.map(lire, sources.SOURCES.items() if communes else []))
+    if os.environ.get("SANS_COLLECTE") == "1":           # reconstruction rapide depuis les annonces déjà lues (réglage du repérage)
+        resultats = [(nom, [a for a in (etat["cache"].get(nom) or {}).get("annonces", []) if a.get("insee") in codes], None)
+                     for nom in sources.SOURCES]
+        sources.ATTEINTES.clear()
+    else:
+        with ThreadPoolExecutor(max_workers=len(sources.SOURCES)) as pool:
+            resultats = list(pool.map(lire, sources.SOURCES.items() if communes else []))
     for nom, res, e in resultats:
         cache = etat["cache"].get(nom) or {}
         anciennes = [a for a in cache.get("annonces", []) if a.get("insee") in codes]
