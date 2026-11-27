@@ -1,0 +1,25 @@
+name: Sonde agences (test ponctuel)
+# Test ponctuel sur la branche de travail uniquement : rien n'est publié sur la carte.
+on:
+  push:
+    branches: [claude/project-thread-xj8q3a]
+    paths: ['sonde/*.py', 'sonde/script', '.github/workflows/sonde.yml']
+permissions:
+  contents: write
+jobs:
+  sonde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -q requests
+      - run: python sonde/$(cat sonde/script 2>/dev/null || echo reco).py
+      - name: Résultats sur la branche
+        run: |
+          git config user.name "Sonde"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f sonde
+          git commit -qm "Résultats de la sonde [skip ci]" || exit 0
+          git push -q origin HEAD:${GITHUB_REF_NAME}
