@@ -21,39 +21,38 @@ def _esp(rx):
     return rx.replace(" ?", r"\s*").replace(" ", r"\s+")
 
 
-NB2 = r"(?:deux|2|seconde?|deuxieme|2e|2eme|2 eme|autre)"
-LOGT = r"(?:studio|appartement|appart|logement|duplex|f1|f2|f3|t1|t2|t3|t1 bis|loft|habitation)"
+NB2 = r"(?:deux|2|seconde?|deuxieme|2e|2eme|2 eme)"
+LOGT = r"(?:studio|appartement|appart|logement|duplex|f1|f2|f3|t1|t2|t3|t1 bis|loft)"
 
+# (identifiant, famille, poids, motif) ; poids 3 = net, 2 = probable, 1 = simple piste
 INDICES = [
     # --- deux maisons sur le terrain
-    ("deux_maisons", 3, rf"\b{NB2} (?:maisons?|habitations?|pavillons?|batisses?)\b"),
-    ("deux_maisons", 3, r"\bmaison (?:d'? ?amis?|de gardiens?|d'? ?invites?|annexe|secondaire|de famille independante)\b"),
-    ("deux_maisons", 3, r"\b(?:petite|seconde|deuxieme|autre) maison (?:independante|sur le terrain|dans le (?:jardin|parc))"),
-    ("deux_maisons", 2, r"\bmaisonnette\b"),
-    ("deux_maisons", 2, r"\bgites?\b"),
-    ("deux_maisons", 2, r"\bpool ?house\b"),
-    ("deux_maisons", 1, r"\bchambres? d'hotes?\b"),
+    ("2maisons", "deux_maisons", 3, rf"\b{NB2} (?:maisons|habitations|pavillons|batisses)\b(?! (?:de ville|mitoyennes?|voisines?|plus loin|de la|du|des|d'))"),
+    ("maison_amis", "deux_maisons", 3, r"\bmaison (?:d'? ?amis?|de gardiens?|d'? ?invites?|annexe)\b"),
+    ("petite_maison", "deux_maisons", 3, r"\b(?:petite|seconde|deuxieme) maison (?:independante|sur le terrain|dans le (?:jardin|parc))"),
+    ("maisonnette", "deux_maisons", 2, r"\bmaisonnette\b"),
+    ("gite", "deux_maisons", 3, r"\bgites?\b"),
+    ("poolhouse", "deux_maisons", 1, r"\bpool ?house\b"),
     # --- maison scindée en deux logements
-    ("divisee", 3, rf"\b{NB2} (?:logements|appartements|lots|parties (?:habitables|independantes|distinctes)|unites d'habitation|foyers)\b"),
-    ("divisee", 3, rf"\b{LOGT} (?:independant|indepandant|attenant|separe|annexe)e?s?\b"),
-    ("divisee", 3, r"\bbi-? ?famil|\bintergenerationnel|\bkangourou\b|\bmaison de famille pour deux\b"),
-    ("divisee", 3, r"\bdivisibles? en (?:deux|2)\b|\bdivisee en (?:deux|2)\b|\bpossibilite de (?:faire |creer )?(?:deux|2) (?:logements|appartements)"),
-    ("divisee", 3, rf"\b{NB2} cuisines\b"),
-    ("divisee", 2, r"\bentrees? independantes?\b|\b(?:deux|2) entrees\b"),
-    ("divisee", 2, r"\b(?:revenus? locatifs?|actuellement loue|partie louee|location saisonniere|loyer mensuel)\b"),
-    ("divisee", 1, r"\b(?:deux|2) salles? (?:d'eau|de bains?)\b"),
+    ("2logements", "divisee", 3, rf"\b{NB2} (?:logements|appartements|lots|parties (?:habitables|independantes|distinctes)|unites d'habitation|foyers)\b"),
+    ("logt_indep", "divisee", 3, rf"\b{LOGT} (?:independant|indepandant|attenant|separe)e?s?\b"),
+    ("bifamille", "divisee", 3, r"\bbi-? ?famil|\bintergenerationnel|\bkangourou\b"),
+    ("divisible", "divisee", 3, r"\bdivisibles? en (?:deux|2)\b|\bdivisee en (?:deux|2)\b|\bpossibilite de (?:faire |creer )?(?:deux|2) (?:logements|appartements)"),
+    ("2cuisines", "divisee", 3, rf"\b{NB2} cuisines\b"),
+    ("entree_indep", "divisee", 1, r"\bentrees? independantes?\b|\b(?:deux|2) entrees\b"),
+    ("locatif", "divisee", 1, r"\b(?:revenus? locatifs?|actuellement loue|partie louee|loyer mensuel)\b"),
     # --- dépendance à aménager
-    ("dependance", 2, r"\b(?:grange|dependance|batiment|atelier|ecurie|bergerie|hangar|remise|grenier)s? (?:a amenager|amenageables?|a renover|transformables?|a rehabiliter)\b"),
-    ("dependance", 2, r"\bcorps de ferme\b"),
-    ("dependance", 1, r"\bancienne ferme\b|\blongere\b"),
-    ("dependance", 1, r"\bdependances?\b"),
+    ("dep_amenager", "dependance", 2, r"\b(?:grange|dependance|batiment|atelier|ecurie|bergerie|hangar|remise)s? (?:a amenager|amenageables?|transformables?|a rehabiliter)\b"),
+    ("corps_ferme", "dependance", 1, r"\bcorps de ferme\b"),
+    ("dependance", "dependance", 1, r"\bdependances?\b"),
 ]
-INDICES = [(c, p, re.compile(_esp(rx))) for c, p, rx in INDICES]
+INDICES = [(i, c, p, re.compile(_esp(rx))) for i, c, p, rx in INDICES]
 
-# « grange de 120 m² », « dépendance d'environ 80m2 », « atelier attenant (60 m²) »
+# « grange de 120 m² », « dépendance d'environ 80m2 », « atelier attenant (60 m²) » : surface collée au mot (pas de virgule entre)
 SURF_RX = re.compile(_esp(
-    r"\b(grange|dependance|batiment|atelier|ecurie|bergerie|hangar|remise|annexe|longere|chai|cellier|garage|grenier|"
-    r"studio|appartement|maison d'amis|maisonnette|gite|second logement)s?\b[^.;\n]{0,45}?(\d{2,4})(?:[.,]\d+)? ?(?:m2|m\b|metres? carres)"))
+    r"\b(grange|dependance|batiment annexe|atelier|ecurie|bergerie|hangar|remise|annexe|studio|maison d'amis|maisonnette|gite|second logement)s?"
+    r"(?: (?:attenante?|independante?|amenageable|a amenager|separee?|indep\.?|d'une surface|d'environ|de plus de|de pres de|totale?|au sol|de|d'|:|\(|env\.?|environ|d'env\.?))* ?"
+    r"(\d{2,4})(?:[.,]\d+)? ?(?:m2|m\b|metres? carres)"))
 NON = re.compile(r"\b(?:pas de dependance|sans dependance|ni dependance)\b")
 NOMS = {"deux_maisons": "Deux maisons", "divisee": "Maison divisée en 2 logements", "dependance": "Dépendance ≥ 50 m²"}
 
@@ -76,34 +75,31 @@ def analyser(titre, desc, pieces=None, surf=None):
     t = norm(brut)
     if not t.strip():
         return None
-    points, extraits, vus = {}, [], set()
-    for cat, poids, rx in INDICES:
+    points, extraits, ids, fort = {}, [], [], 0
+    for ident, cat, poids, rx in INDICES:
         m = rx.search(t)
-        if m and (cat, rx.pattern) not in vus:
-            vus.add((cat, rx.pattern))
+        if m:
+            ids.append(ident); fort = max(fort, poids)
             points[cat] = points.get(cat, 0) + poids
             if poids >= 2:
                 ajouter(extraits, brut, m)
     # surfaces : une dépendance ou un second logement d'au moins 50 m² est un indice net
     for m in SURF_RX.finditer(t):
-        mot, s = m.group(1), int(m.group(2))
-        if mot == "garage" and s < 60:
-            continue
-        if s >= 50 and s < 2000:
-            cat = "dependance" if mot not in ("studio", "appartement", "maison d'amis", "maisonnette", "gite", "second logement") else "deux_maisons"
+        mot, surf_dep = m.group(1), int(m.group(2))
+        if 50 <= surf_dep < 1000:
+            cat = "deux_maisons" if mot in ("studio", "maison d'amis", "maisonnette", "gite", "second logement") else "dependance"
+            ids.append("surface"); fort = 3
             points[cat] = points.get(cat, 0) + 3
             ajouter(extraits, brut, m)
             break
     if NON.search(t):
         points.pop("dependance", None)
-    # grande maison avec beaucoup de pièces : simple piste, qui s'ajoute aux autres
-    if pieces and surf and pieces >= 9 and surf >= 220:
-        points["divisee"] = points.get("divisee", 0) + 1
     score = sum(points.values())
-    if score < 3 or max(points.values(), default=0) < 2:
+    # retenu : un indice net (3 points), ou plusieurs indices qui se recoupent (4 points dont un probable)
+    if not points or not (fort >= 3 or (score >= 4 and fort >= 2)):
         return None
     cats = sorted(points, key=lambda c: -points[c])
-    return {"score": score, "cats": cats, "noms": [NOMS[c] for c in cats if points[c] >= 2], "extraits": [e for _, e in sorted(extraits)]}
+    return {"score": score, "cats": cats, "noms": [NOMS[c] for c in cats if points[c] >= 2], "extraits": [e for _, e in sorted(extraits)], "ids": ids}
 
 
 if __name__ == "__main__":                       # petits essais : python collecte/multi_detect.py
@@ -115,6 +111,10 @@ if __name__ == "__main__":                       # petits essais : python collec
         ("Maison", "Maison avec studio indépendant loué 600 €."),
         ("Pavillon", "Pavillon indépendant sur sous-sol total, garage 20 m²."),
         ("Maison", "Maison sans dépendance, terrain 500 m²."),
+        ("Maison", "Maison de 120 m² avec garage, atelier, séjour de 50 m² et dépendances."),
+        ("Longère", "Longère de 160 m², grenier aménageable, à 2 maisons de la gare."),
+        ("Maison", "Au calme, loin des autres maisons, résidence secondaire idéale avec gîte rural."),
+        ("Maison", "Corps de ferme avec grange à aménager et dépendances."),
     ]
     for ti, de in essais:
         print(ti, "->", analyser(ti, de))
