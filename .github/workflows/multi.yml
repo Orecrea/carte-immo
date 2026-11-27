@@ -13,9 +13,6 @@ on:
         description: "Sans relire les sites : recalcule seulement le tri à partir des annonces déjà lues"
         type: boolean
         default: false
-  push:                       # premier passage, depuis la branche de travail (retiré avant la fusion)
-    branches: [claude/project-thread-syehho]
-    paths: ['collecte/multi.py', 'collecte/multi_detect.py', '.github/workflows/multi.yml']
 
 permissions:
   contents: write
