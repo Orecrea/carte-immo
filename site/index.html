@@ -626,12 +626,23 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
   .env button{position:relative;z-index:1;display:flex;align-items:center;gap:6px;height:32px;padding:0 14px;border:0;background:none;border-radius:999px;font-weight:600;font-size:13.5px;color:var(--muted);transition:color .25s}
   .env button[aria-selected=true]{color:#fff}
   .env .ei{font-size:14px}
-  .env-glide{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:999px;background:var(--accent);box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 40%,transparent);transition:transform .3s cubic-bezier(.3,.7,.2,1),background .3s}
+  .env-glide{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 3);border-radius:999px;background:var(--accent);box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 40%,transparent);transition:transform .3s cubic-bezier(.3,.7,.2,1),background .3s}
   .env button{flex:1;justify-content:center}
-  body.env-tc .env-glide{transform:translateX(100%);background:linear-gradient(135deg,#1f5fbf,#5b3fb0);box-shadow:0 2px 8px rgba(70,80,200,.4)}
+  body.env-tc .env-glide{transform:translateX(200%);background:linear-gradient(135deg,#1f5fbf,#5b3fb0);box-shadow:0 2px 8px rgba(70,80,200,.4)}
   .tc-wrap{position:fixed;inset:var(--header) 0 0 0;z-index:1050;opacity:0;visibility:hidden;transition:opacity .2s,visibility 0s .2s;background:var(--bg)}
   .tc-wrap iframe{width:100%;height:100%;border:0;display:block}
   body.env-tc .tc-wrap{opacity:1;visibility:visible;transition:opacity .2s}
+  body.env-multi .env-glide{transform:translateX(100%);background:linear-gradient(135deg,#0f766e,#15803d);box-shadow:0 2px 8px rgba(15,118,110,.4)}
+  body.env-multi .search,body.env-multi .cities-wrap,body.env-multi #refreshBtn,body.env-multi #syncNote{visibility:hidden}
+  body.env-multi #refreshBtn,body.env-multi #syncNote{display:none}
+  .env button{white-space:nowrap}
+  .pill.multipill{background:#e7f5ef;color:#0f6b4f;font-weight:600}
+  [data-theme=dark] .pill.multipill{background:#173a2e;color:#8fe0bd}
+  .multi-box{margin:14px 0;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,#0f766e 8%,var(--panel));border:1px solid color-mix(in srgb,#0f766e 25%,var(--line))}
+  .multi-box h3{margin:0 0 6px}
+  .multi-box blockquote{margin:6px 0;padding:4px 10px;border-left:3px solid #0f766e;color:var(--muted);font-size:13px}
+  .multi-box ul{margin:4px 0 0;list-style:none;padding-left:0}
+  .multi-box .ok{color:#0f766e}.multi-box .ko{color:#b42318}
   body.env-tc .search,body.env-tc .cities-wrap,body.env-tc #themeBtn,body.env-tc #hdrFavs{visibility:hidden}
   body.env-tc .logo span{color:#5b3fb0}
   body.env-tc .logo-mark{background:linear-gradient(135deg,#1f5fbf,#5b3fb0)}
@@ -648,6 +659,7 @@ try { const t = JSON.parse(localStorage.getItem('carteimmo2.theme')); document.d
   <div class="env" id="envSwitch" role="tablist" aria-label="Choix de la carte (touche T)">
     <span class="env-glide" aria-hidden="true"></span>
     <button role="tab" data-env="immo" aria-selected="true" title="Annonces (touche T pour basculer)"><span class="ei">🏠</span><span class="el">Annonces</span></button>
+    <button role="tab" data-env="multi" aria-selected="false" tabindex="-1" title="Biens multi-logements, recherche hebdomadaire"><span class="ei">🏘️</span><span class="el">Multi-logements</span></button>
     <button role="tab" data-env="tc" aria-selected="false" tabindex="-1" title="Transports (touche T pour basculer)"><span class="ei">🚆</span><span class="el">Transports</span></button>
   </div>
   <div class="search" role="search">
@@ -818,6 +830,7 @@ const PARIS = [48.8566, 2.3522];
    ========================================================= */
 const DPE_COL = {A:'#009a49',B:'#52b153',C:'#a6cc3a',D:'#f2e600',E:'#f0b30b',F:'#e9711c',G:'#d7221f'};
 const LISTINGS = [];
+let dataMode = 'immo', DATA_IMMO = null, DATA_MULTI = null, multiFit = false;   // onglet Annonces ou Multi-logements
 let DATA = null;                       // dernier fichier de collecte déchiffré
 const NOPHOTO = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 56"><rect width="90" height="56" fill="#eef0f3"/><path d="M33 34V25l12-9 12 9v9H49v-6h-8v6z" fill="#c4c9d2"/></svg>');
 function photo(l, i){ return (l.photos && l.photos[i]) || NOPHOTO; }
@@ -2096,7 +2109,7 @@ function zonesFor(l){
   return zones.filter(z => !z.off && (!zoneCities(z) || gs.some(g => zoneCities(z).includes(g))));
 }
 function inArea(l){
-  if(!zones.length) return true;
+  if(!zones.length || dataMode === 'multi') return true;      // multi-logements : critère de trajet propre (moins d'1 h de Paris)
   const zs = zonesFor(l); if(!zs.length) return true;
   const n = zs.filter(z => zoneContains(z, l)).length;
   return F.match === 'all' ? n === zs.length : n > 0;
@@ -2123,7 +2136,7 @@ function cardHTML(l, gone){
       <div><span class="price">${fmt(l.price)} €</span><span class="ppm">${ppmTxt(l)}</span></div>
       <div class="spec">${specTxt(l)}</div>
       <div class="loc">${l.city} (${l.cp})${l.terrain ? ' · terrain ' + fmt(l.terrain) + ' m²' : ''}</div>
-      <div class="meta">${vus[l.id] && !gone ? `<span class="pill seenpill">👁 ${vuTxt(l.id)}</span>` : ''}${gone ? '<span class="pill">Annonce retirée</span>' : trips}${l.dpe ? `<span class="pill dpepill" style="background:${DPE_COL[l.dpe]};color:${dcol}">DPE ${l.dpe}</span>` : ''}</div>
+      <div class="meta">${l.multi ? l.multi.noms.slice(0, 2).map(x => `<span class="pill multipill">🏘 ${esc(x)}</span>`).join('') + (l.paris ? `<span class="pill multipill" title="Temps estimé jusqu'à Paris / jusqu'au métro visé">🚆 ${l.paris.paris} min · ${l.paris.cible} min</span>` : '') : ''}${vus[l.id] && !gone ? `<span class="pill seenpill">👁 ${vuTxt(l.id)}</span>` : ''}${gone ? '<span class="pill">Annonce retirée</span>' : trips}${l.dpe ? `<span class="pill dpepill" style="background:${DPE_COL[l.dpe]};color:${dcol}">DPE ${l.dpe}</span>` : ''}</div>
     </div></div>`;
 }
 /* Annonces : une seule source de données, dessinée par la carte graphique (regroupement natif) */
@@ -2174,7 +2187,7 @@ function renderList(){
   currentList = vis;
   const total = inside.length, n = vis.length;
   $('#nbTab').textContent = n;
-  $('#resTitle').textContent = `${n} maison${n > 1 ? 's' : ''} sur la carte`;
+  $('#resTitle').textContent = dataMode === 'multi' ? `${n} bien${n > 1 ? 's' : ''} multi-logements sur la carte` : `${n} maison${n > 1 ? 's' : ''} sur la carte`;
   $('#visNote').textContent = total > n ? `${total} au total avec vos critères. Déplacez ou dézoomez la carte pour voir les autres.` : '';
   const fc = activeFilterCount() + (zones.length ? 1 : 0); $('#fcount').hidden = !activeFilterCount(); $('#fcount').textContent = activeFilterCount(); $('#fTab').hidden = !fc; $('#fTab').textContent = fc;
 
@@ -2184,7 +2197,8 @@ function renderList(){
     // pourquoi rien ici : maisons collectées dans cette partie de la carte, puis avec les critères, puis dans les trajets
     const here = LISTINGS.filter(l => inView(l, vb) && inCities(l)), crit = here.filter(l => passCriteria(l) && !isHidden(l) && (!F.unseen || !vus[l.id]));
     const why = !cities.length ? '' : `<div class="why" style="margin-top:10px;font-size:12.5px;color:var(--muted)">Sur cette partie de la carte : ${here.length} maison${here.length > 1 ? 's' : ''} collectée${here.length > 1 ? 's' : ''}${here.length ? `, ${crit.length} avec vos critères${zones.length && crit.length ? `, 0 dans vos trajets` : ''}` : ' (la collecte de ces villes n\'est peut-être pas encore faite)'}.${F.match === 'all' && zones.length > 1 ? `<br>Règle des trajets : « près de toutes les destinations ». Choisissez « près d'au moins une destination » pour additionner les trajets.` : ''}</div>`;
-    list.innerHTML = !cities.length ? `<div class="empty"><div class="big">📍</div><b>Choisissez une ville</b>Tapez une ou plusieurs villes en haut de la page pour voir leurs maisons à vendre.</div>`
+    list.innerHTML = dataMode === 'multi' ? `<div class="empty"><div class="big">🏘️</div><b>${DATA ? (total ? 'Aucun bien multi-logements dans cette partie de la carte' : 'Aucun bien multi-logements avec vos critères') : 'Recherche multi-logements pas encore faite'}</b>${DATA ? (total ? `${total} ailleurs.<br><br><button class="btn" id="showAll">Voir tous les biens</button>` : 'Les critères de l\'onglet Filtres (prix, surface…) s\'appliquent aussi ici.') : 'La première recherche hebdomadaire est en cours : revenez dans quelques heures.'}</div>`
+      : !cities.length ? `<div class="empty"><div class="big">📍</div><b>Choisissez une ville</b>Tapez une ou plusieurs villes en haut de la page pour voir leurs maisons à vendre.</div>`
       : total ? `<div class="empty"><div class="big">🗺️</div><b>Aucune maison dans cette partie de la carte</b>${total} maison${total > 1 ? 's' : ''} correspond${total > 1 ? 'ent' : ''} ailleurs.<br><br><button class="btn" id="showAll">Voir toutes les maisons</button>${why}</div>`
       : `<div class="empty"><div class="big">🏡</div><b>Aucune maison ne correspond</b>Allongez le temps de trajet, ajoutez une ville ou assouplissez les critères.<br><br><button class="btn" id="emptyReset">Réinitialiser les critères</button>${why}</div>`;
     if($('#showAll')) $('#showAll').onclick = () => fitTo(BB.of(lastInside.map(l => [l.lat, l.lng])).pad(.1));
@@ -2400,6 +2414,7 @@ function openListing(l, list){
         <div class="fact"><small>Construction</small><b>${l.year || '—'}</b></div>
         <div class="fact"><small>DPE / GES</small><b>${l.dpe ? `<span class="dpe" style="background:${DPE_COL[l.dpe]}">${l.dpe}</span>` : '—'} ${l.ges ? `<span class="dpe" style="background:${DPE_COL[l.ges]}">${l.ges}</span>` : ''}</b></div>
       </div>
+      ${multiBox(l)}
       <p class="m-desc" id="mDesc">${desc}</p><button class="link m-desc-more" id="mDescMore" hidden>Lire toute la description ▾</button>
       <div class="m-cols">
         <div>
@@ -2436,6 +2451,18 @@ function openListing(l, list){
   const md = $('#mDesc'), mm = $('#mDescMore');
   if(md && mm){ requestAnimationFrame(() => { mm.hidden = md.scrollHeight <= md.clientHeight + 4; });
     mm.onclick = () => { const f = md.classList.toggle('full'); mm.textContent = f ? 'Réduire la description ▴' : 'Lire toute la description ▾'; if(!f) md.scrollTop = 0; }; }
+}
+function multiBox(l){
+  if(!l.multi) return '';
+  const p = l.paris, eq = Object.values(l.equip || {});
+  const cib = p ? Object.entries(p.cibles || {}).map(([k, v]) => `${esc(k)} ~${v} min`).join(' · ') : '';
+  return `<div class="multi-box"><h3>🏘 Pourquoi ce bien : ${esc(l.multi.noms.join(' · ') || 'plusieurs indices')}</h3>
+    ${(l.multi.extraits || []).map(x => `<blockquote>${esc(x)}</blockquote>`).join('')}
+    ${p ? `<h3 style="margin-top:10px">🚆 Trajet vers Paris (heure de pointe, estimation)</h3>
+      <div>Gare de ${esc(p.gare)} (${String(p.gare_km).replace('.', ',')} km)${p.lignes && p.lignes.length ? ' · ' + esc(p.lignes.join(', ')) : ''} : <b>~${p.paris} min jusqu'à Paris</b> (${esc(p.via || '')})<br>
+      Jusqu'au métro : ${cib} ${p.ideal ? '<span class="ok">· moins d\'une heure ✓</span>' : ''}</div>` : ''}
+    ${eq.length ? `<h3 style="margin-top:10px">🏫 Équipements de la commune (ou à moins de 5 km)</h3><ul>${eq.map(e => `<li class="${e.ou ? 'ok' : 'ko'}">${e.ou ? '✓' : '✗'} ${esc(e.nom)} : ${esc(e.ou || 'pas trouvé')}</li>`).join('')}</ul>` : ''}
+    <small style="color:var(--muted)">Repéré automatiquement dans le texte de l'annonce${l.trouve ? ' le ' + new Date(l.trouve).toLocaleDateString('fr-FR', {day:'numeric', month:'long'}) : ''} : à vérifier sur l'annonce.</small></div>`;
 }
 function renderNote(){
   const box = $('#noteBox'); if(!box || !current) return;
@@ -2482,7 +2509,7 @@ const norm = x => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 function inRing(x, y, ring){ let ins = false; for(let i = 0, j = ring.length - 1; i < ring.length; j = i++){ const [xi, yi] = ring[i], [xj, yj] = ring[j]; if(((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ins = !ins; } return ins; }
 function inGeom(lng, lat, g){ const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []; return polys.some(p => inRing(lng, lat, p[0]) && !p.slice(1).some(h => inRing(lng, lat, h))); }
-function inCities(l){ return cities.length > 0 && activeCommunes.some(c => inGeom(l.lng, l.lat, c.geom)); }   // sans ville choisie : aucune annonce
+function inCities(l){ if(dataMode === 'multi') return true; return cities.length > 0 && activeCommunes.some(c => inGeom(l.lng, l.lat, c.geom)); }   // sans ville choisie : aucune annonce
 
 async function fetchContour(code){
   if(geoCache[code]) return geoCache[code];
@@ -2809,6 +2836,7 @@ async function loadPartial(){
   } catch(_) { return false; }
 }
 function applyData(d){
+  if(dataMode === 'multi'){ const ch = !DATA_IMMO || DATA_IMMO.maj !== d.maj; DATA_IMMO = d; return ch; }   // onglet Multi-logements ouvert : on garde pour le retour
   const changed = !DATA || DATA.maj !== d.maj;
   DATA = d;
   if(changed){
@@ -2821,9 +2849,46 @@ function applyData(d){
   renderSync();
   return changed;
 }
+/* Onglet « Multi-logements » : même carte, mêmes fiches, données de la recherche hebdomadaire (multi.enc) */
+async function loadMulti(){
+  if(!KEY) return null;
+  try {
+    const r = await fetch('multi.enc?t=' + Date.now(), {cache:'no-store'});
+    if(!r.ok) return null;
+    return await decryptJSON(await r.text(), KEY);
+  } catch(_) { return null; }
+}
+function putData(d){
+  DATA = d; LISTINGS.length = 0;
+  if(d){ LISTINGS.push(...d.annonces); LISTINGS.forEach(l => { if(favs[l.id]) favs[l.id].l = snapshot(l); }); }
+  renderListings(); renderFavs(); renderSync();
+}
+async function switchData(e){
+  const want = e === 'multi' ? 'multi' : 'immo';
+  if(want === dataMode) return;
+  if(want === 'multi'){
+    DATA_IMMO = DATA; dataMode = 'multi';
+    putData(DATA_MULTI);
+    if(!DATA_MULTI || Date.now() - (DATA_MULTI._t || 0) > 3600e3){
+      setSyncTxt('<b>Chargement des biens multi-logements…</b>');
+      const d = await loadMulti(); if(d){ d._t = Date.now(); DATA_MULTI = d; }
+      if(dataMode !== 'multi') return;
+      putData(DATA_MULTI);
+    }
+    if(DATA_MULTI && DATA_MULTI.annonces.length && !multiFit){ multiFit = true; fitTo(BB.of(DATA_MULTI.annonces.map(l => [l.lat, l.lng])).pad(.08), {maxZoom:12}); }
+  } else { dataMode = 'immo'; putData(DATA_IMMO); }
+}
+function renderSyncMulti(){
+  const M = (DATA && DATA.multi) || {};
+  if(!DATA){ setSyncTxt('<b>Recherche multi-logements</b><br><small>Pas encore de résultat : la recherche tourne chaque lundi matin.</small>'); return; }
+  const n = DATA.annonces.length, m = new Date(DATA.maj);
+  setSyncTxt(`<b>${fmt(n)} bien${n > 1 ? 's' : ''} multi-logements</b> · recherche du ${m.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'})}<br><small>Chaque lundi : ${fmt(M.communes || 0)} communes à moins d'1 h de Paris avec écoles, santé et loisirs, jusqu'à ${fmt(M.prix_max || 0)} €</small>`);
+  $('#srcList').innerHTML = Object.entries(DATA.sources || {}).map(([k, v]) => `<li>${v.ok ? '✓' : '⚠️'} ${esc(k)} : ${esc(v.msg)}</li>`).join('');
+}
 const fmtDate = (iso, h) => new Date(iso).toLocaleString('fr-FR', h ? {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'} : {day:'numeric', month:'long'});
 function setSyncTxt(h){ $('#syncTxt').innerHTML = h; }
 function renderSync(){
+  if(dataMode === 'multi') return renderSyncMulti();
   if(!DATA) return;
   const n = DATA.annonces.length, fin = new Date(DATA.fin), paused = fin < new Date();
   const m = new Date(DATA.maj), today = m.toDateString() === new Date().toDateString();
@@ -2960,8 +3025,8 @@ function updateVisits(){
   store.set('visites', w); visitBase = w.base;
 }
 document.addEventListener('visibilitychange', () => { const v = store.get('visites', null); if(v && DATA){ v.last = Date.now(); store.set('visites', v); } });
-const isNew = l => !!visitBase && !(l.id in visitBase.ids);
-const isDropped = l => !!visitBase && l.id in visitBase.ids && l.price < visitBase.ids[l.id];
+const isNew = l => dataMode === 'multi' ? !!l.trouve && Date.now() - new Date(l.trouve) < 8 * 864e5 : !!visitBase && !(l.id in visitBase.ids);
+const isDropped = l => dataMode !== 'multi' && !!visitBase && l.id in visitBase.ids && l.price < visitBase.ids[l.id];
 const isNews = l => isNew(l) || isDropped(l);
 function renderNews(inside){
   const box = $('#newsBox');
@@ -3184,9 +3249,12 @@ function tcView(){
 }
 function setEnv(e, quiet){
   if(e === ENV) return;
+  const prevEnv = ENV;
   ENV = e; store.set('env', e);
   document.querySelectorAll('[data-env]').forEach(b => { const on = b.dataset.env === e; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
   document.body.classList.toggle('env-tc', e === 'tc');
+  document.body.classList.toggle('env-multi', e === 'multi');
+  if(e !== 'tc') switchData(e);
   if(e === 'tc'){
     setCitiesOpen(false); setLayersOpen(false);
     if(!tframe){
@@ -3196,7 +3264,7 @@ function setEnv(e, quiet){
       $('#tcWrap').appendChild(tframe);
     } else { try { tframe.contentWindow.location.hash = hashOf(); } catch(_) {} }
     $('#tcWrap').inert = false;
-  } else {
+  } else if(prevEnv === 'tc'){
     const v = tframe && tcView(); if(v && !quiet) map.jumpTo(v);
     $('#tcWrap').inert = true;
     map.resize();
@@ -3208,11 +3276,12 @@ function envKey(e){
   if($('#modalBg').classList.contains('open')) return;
   e.preventDefault(); setEnv(ENV === 'tc' ? 'immo' : 'tc');
 }
+const ENVS = ['immo', 'multi', 'tc'];
 document.addEventListener('keydown', envKey);
 $('#envSwitch').addEventListener('click', e => { const b = e.target.closest('[data-env]'); if(b) setEnv(b.dataset.env); });
-$('#envSwitch').addEventListener('keydown', e => { if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){ e.preventDefault(); setEnv(ENV === 'tc' ? 'immo' : 'tc'); $(`[data-env=${ENV}]`).focus(); } });
+$('#envSwitch').addEventListener('keydown', e => { if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){ e.preventDefault(); setEnv(ENVS[(ENVS.indexOf(ENV) + (e.key === 'ArrowRight' ? 1 : 2)) % 3]); $(`[data-env=${ENV}]`).focus(); } });
 $('#tcWrap').inert = true;
-if(store.get('env', 'immo') === 'tc') setEnv('tc', true);
+if(store.get('env', 'immo') !== 'immo') setEnv(store.get('env', 'immo'), true);
 
 refresh(); updateFavCounts(); renderFavs(); loadPoi(); zones.forEach(z => computeZone(z));
 // GitHub saute souvent ses collectes programmées : si le dernier rendez-vous (10 h, 14 h, 20 h à Paris) n'a pas eu
@@ -3223,7 +3292,7 @@ function dernierRdv(){
   return Math.max(...rdv.filter(t => t <= now.getTime()));
 }
 async function rattrapage(){
-  if(!jeton || !KEY || !DATA || DATA.partiel || !cities.length) return;
+  if(!jeton || !KEY || !DATA || DATA.partiel || !cities.length || dataMode === 'multi') return;
   const rdv = dernierRdv();
   if(new Date(DATA.fin) < new Date() || new Date(DATA.maj).getTime() >= rdv - 60e3 || Date.now() - rdv < 10 * 60e3) return;
   if(Date.now() - store.get('pending', 0) < pendingWindow() || store.get('rattrapage', 0) === rdv) return;
