@@ -218,6 +218,9 @@ def main():
         if not manque:
             retenues.append(c)
     log(f"{len(retenues)} commune(s) avec tous les équipements (sur place ou à moins de {RAYON_EQUIP:.0f} km)")
+    # journal public : compteurs anonymes seulement
+    print(f"Zone : {len(toutes)} communes lues, {len(zone)} à moins d'1 h, {len(retenues)} équipées "
+          f"(équipements {'ok' if bpe_ok else 'indisponibles'}, {len(eq)} communes dans la BPE) ; {round(time.time() - t0)} s", flush=True)
     # les plus proches de Paris d'abord : si le temps manque, ce sont les plus lointaines qui attendent la semaine suivante
     retenues.sort(key=lambda c: (c["trajet"]["cible"], c["trajet"]["paris"]))
     codes = [c["code"] for c in retenues]
