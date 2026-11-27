@@ -1,24 +1,18 @@
-"""Diagnostic (temporaire) : sources de données publiques pour la recherche multi-logements."""
-import json, re, urllib.request, urllib.parse
+"""Diagnostic (temporaire) : BPE 2025 de l'INSEE pour la recherche multi-logements."""
+import csv, io, re, urllib.request, zipfile, time
 UA = {"User-Agent": "carte-immo (usage prive)"}
-def get(u, t=60):
-    return urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=t)
-for q in ["base permanente des équipements", "BPE équipements commune"]:
-    try:
-        j = json.load(get("https://www.data.gouv.fr/api/1/datasets/?page_size=12&q=" + urllib.parse.quote(q)))
-        for d in j["data"]:
-            print("DATASET", d["slug"], "|", (d.get("organization") or {}).get("name"))
-            for r in d.get("resources", [])[:25]:
-                print("   RES", r.get("format"), r.get("filesize"), "|", r.get("title"), "|", r.get("url"))
-    except Exception as e:
-        print("ERR", q, e)
-for u in ["https://service.annuaire.sante.fr/annuaire-sante-webservices/V300/services/extraction/PS_LibreAcces",
-          "https://www.insee.fr/fr/statistiques/8217525", "https://res.bienici.com/suggest.json?q=Pontoise"]:
-    try:
-        r = get(u); print("URL", u, r.status, r.headers.get("Content-Type"), r.headers.get("Content-Length"))
-        if "insee" in u:
-            print(re.findall(r'href="([^"]*fichier[^"]*)"', r.read().decode("utf-8", "ignore"))[:30])
-        if "bienici" in u:
-            print(r.read()[:300])
-    except Exception as e:
-        print("ERR", u, e)
+get = lambda u, t=300: urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=t).read()
+B = "https://www.insee.fr"
+t = get(B + "/fr/metadonnees/source/fichier/TYPEQU_2025.csv").decode("utf-8-sig", "ignore")
+print(t[:300])
+for l in t.splitlines():
+    if re.search(r"(?i)cole|coll[eè]ge|lyc[ée]e|g[ée]n[ée]ral|omnipra|psych|orthoph|loisir|mineurs|centre social|maison de sant|centre de sant|urgence", l):
+        print("TYPEQU", l)
+t0 = time.time(); z = get(B + "/fr/statistiques/fichier/8217525/BPE25.zip"); print("zip", len(z) // 1e6, "Mo", round(time.time() - t0), "s")
+zf = zipfile.ZipFile(io.BytesIO(z))
+for i in zf.infolist(): print("MEMBRE", i.filename, i.file_size)
+nom = max(zf.infolist(), key=lambda i: i.file_size).filename
+with zf.open(nom) as f:
+    for k, l in enumerate(io.TextIOWrapper(f, encoding="utf-8", errors="ignore")):
+        if k < 3: print("LIGNE", l[:400])
+        else: break
