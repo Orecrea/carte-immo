@@ -19,6 +19,7 @@ PRIX_MAX = 800_000             # au-delà, les annonces sont ignorées dès la c
 
 LIMITE = None                  # heure (time.time()) à laquelle chaque site s'arrête, pour finir avant la limite de GitHub
 ATTEINTES = {}                 # site -> codes des communes effectivement lues (les autres gardent l'ancien résultat)
+ZONES = {}                     # commune -> zones Bien'ici déjà trouvées (recherche multi-logements : évite une requête)
 PARTIEL = {}                   # site -> annonces déjà lues pendant la collecte (publiées au fur et à mesure)
 
 
@@ -135,14 +136,16 @@ def bienici(communes, log):
     s = session()
     out = _sortie("Bien'ici")
     for c in parcourir("Bien'ici", communes, log):
-        r = get(s, "https://res.bienici.com/suggest.json", params={"q": c["nom"]}).json()
-        zones = [z for z in r if c["code"] in (z.get("insee_codes") or [z.get("insee_code")])] or \
-                [z for z in r if set(z.get("postalCodes") or []) & set(c["codesPostaux"] or [])
-                 and slug(z.get("name", "")) == slug(c["nom"])]
-        if not zones:
-            log(f"Bien'ici : commune introuvable ({c['nom']})")
-            continue
-        zid = zones[0]["zoneIds"]
+        zid = ZONES.get(c["code"])
+        if not zid:
+            r = get(s, "https://res.bienici.com/suggest.json", params={"q": c["nom"]}).json()
+            zones = [z for z in r if c["code"] in (z.get("insee_codes") or [z.get("insee_code")])] or \
+                    [z for z in r if set(z.get("postalCodes") or []) & set(c["codesPostaux"] or [])
+                     and slug(z.get("name", "")) == slug(c["nom"])]
+            if not zones:
+                log(f"Bien'ici : commune introuvable ({c['nom']})")
+                continue
+            zid = ZONES[c["code"]] = zones[0]["zoneIds"]
         page, n = 0, 0
         while n < MAX_PAR_COMMUNE:
             f = {"size": 100, "from": page * 100, "showAllModels": False, "filterType": "buy",
