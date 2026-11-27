@@ -1,0 +1,8 @@
+User-agent: * 
+Allow: /
+Disallow: /*.xls$
+Disallow: /*.doc$
+Disallow: /?action=listing*$
+Disallow: /listing*$
+Disallow: /public/img/dpe/*$
+Disallow: /impressionbien-*$

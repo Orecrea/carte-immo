@@ -1,0 +1,13 @@
+User-agent: *
+Disallow:
+
+User-agent: barkrowler
+Disallow: /
+
+User-agent: Claudebot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+Sitemap: https://www.arthurimmo.com/sitemap.xml

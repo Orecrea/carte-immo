@@ -1,0 +1,57 @@
+User-agent: *
+Sitemap: https://www.capifrance.fr/sitemap-index
+Disallow:/setCookies
+Disallow:/fr/setCookies
+Disallow:/en/setCookies
+Disallow:/state
+Disallow:/en/properties-around
+Disallow:/fr/properties-around
+Disallow:/fr/my-account/
+Disallow:/en/my-account/
+Disallow:/fr/signup-validation
+Disallow:/en/signup-validation
+Disallow:/fr/signin-validation
+Disallow:/en/signin-validation
+Disallow:/fr/login
+Disallow:/en/login
+Disallow:/nos-conseillers
+Disallow:/*well-known/
+Disallow:/sitemap.xml.gz
+Disallow: /*?*_gl=
+Disallow: /*?*sort=
+Disallow: /*?*__se_=
+Disallow: /*?*gbraid=
+Disallow: /*?*_g=
+Disallow: /*?*place_term=
+Disallow: /*?*radius=
+Disallow: /*?*diagnoses=
+Disallow: /*?*characteristics=
+Disallow: /*?*search=
+Disallow: /*?*place=
+Disallow: /*?*surface_land-min=
+Disallow: /*?*surface_land-max=
+Disallow: /*?*surface_area-min=
+Disallow: /*?*surface_area-max=
+Disallow: /*?*price-max=
+Disallow: /*?*price-min=
+Disallow: /*?*rooms=
+Disallow: /*?*bedrooms=
+Disallow: /*?*bathrooms=
+Disallow: /*?*ref_mandat=
+Disallow: /*?*univers=
+Disallow: /*?*property=
+Disallow: /*?*j=
+Disallow: /*?*notif=
+Disallow: /*?*hash=
+Disallow: /*?*inf=
+Disallow: /*?*m=
+Disallow: /*?*city=
+Disallow: /*?*amp=
+Disallow: /*?*gad_campaign=
+Disallow: /*?*ch=
+Disallow: /*?*hl=
+Disallow: /*?*%2fsitemap=
+Disallow: /*?*%2fnos-conseillers=
+Disallow: /*?*%2fen%2fproperties-around=
+User-agent: meta-externalagent
+Crawl-delay: 20

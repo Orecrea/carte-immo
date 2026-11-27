@@ -1,0 +1,82 @@
+User-agent: *
+Disallow: /login*
+Disallow: /estate/*
+Disallow: /forgot-password*
+Disallow: *agency=*
+Disallow: *sujet=*
+Disallow: *contact=*
+Disallow: *orderBy=*
+Disallow: */v1
+Disallow: /*/partenaire/*
+Disallow: /recherche/*
+Disallow: /don-de-sang*
+Disallow: /annonce-*/photos/
+Disallow: /nouvelle-recherche*
+Disallow: /le-reseau-orpi/actualites-*
+Disallow: /entreprendre/agences-immobilieres-a-vendre*
+
+# Search page SEO management
+Allow: /annonces-immobilieres-*/fi/1-piece/
+Allow: /annonces-immobilieres-*/fi/*-pieces/
+Allow: /location-immobiliere-*/fi/1-piece/
+Allow: /location-immobiliere-*/fi/*-pieces/
+Allow: /location-immobiliere-*/fi/meuble/
+
+Disallow: /annonces-immobilieres-*/1-piece/
+Disallow: /annonces-immobilieres-*/*-pieces/
+Disallow: /location-immobiliere-*/1-piece/
+Disallow: /location-immobiliere-*/*-pieces/
+Disallow: /location-immobiliere-*/meuble/
+
+# Blocage par motifs de parametres (tracking & navigation) - 10/2026
+Disallow: /*?*_gl=
+Disallow: /*?*agence_id=
+Disallow: /*?*agentId=
+Disallow: /*?*amp;utm_
+Disallow: /*?bd=
+Disallow: /*?*&bd=
+Disallow: /*?*fbclid=
+Disallow: /*?*forceTpl=
+Disallow: /*?*gad_source=
+Disallow: /*?*gbraid=
+Disallow: /*?*gclid=
+Disallow: /*?*gclsrc=
+Disallow: /*?*international=
+Disallow: /*?*locations=
+Disallow: /*?*logic=
+Disallow: /*?*opi=
+Disallow: /*?*pageinit=
+Disallow: /*?q=
+Disallow: /*?*&q=
+Disallow: /*?*reference=
+Disallow: /*?*step=
+Disallow: /*?*sujet
+Disallow: /*?t=
+Disallow: /*?*&t=
+Disallow: /*?*trk=
+Disallow: /*?u$
+Disallow: /*?ut$
+Disallow: /*?*utm
+Disallow: /*?vente
+Disallow: /*?*wpmobileexternal=
+Disallow: /*?*yandex-source=
+Disallow: /*?achat
+Disallow: /*?amp
+Disallow: /*?Q=
+Disallow: /*?*&Q=
+Disallow: /*?layout=
+Disallow: /*?*&layout=
+Disallow: /*?resultUrl
+Disallow: /*?*&resultUrl
+
+# Blocage des chemins et formulaires specifiques - 10/2026
+Disallow: /recherche-avancee/
+Disallow: */recherche-avancee/
+Disallow: /recrutement/offres-emploi/*/formulaire/
+Disallow: /qeeps/redirect/
+Disallow: /alerte-mail/?
+Disallow: /vues-refresh
+Disallow: /collect?
+Disallow: /collect$
+
+Sitemap: https://www.orpi.com/sitemap-index.xml

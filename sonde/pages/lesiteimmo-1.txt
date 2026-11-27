@@ -1,0 +1,11 @@
+User-agent: *
+Sitemap: https://www.lesiteimmo.com/sitemap.xml
+
+Disallow: /index.php
+Disallow: /recherche
+Disallow: /recherche-avancee
+Disallow: /recherche-agences
+Disallow: /honoraires
+Disallow: /api
+Allow: /api/listing-image/
+Disallow: /a/

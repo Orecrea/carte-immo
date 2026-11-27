@@ -1,0 +1,50 @@
+User-agent: *
+Disallow: /bien/*/pdf
+Disallow: /*?slug
+Disallow: /acheter/rechercher?*
+Disallow: /louer/rechercher?*
+Disallow: /agence-immobiliere/*/mentions-legales
+Disallow: /agence-immobiliere/*/recrutement
+Disallow: /agence-immobiliere/*/candidature-spontanee
+Disallow: /agence-immobiliere/*/garantie-apres-vente
+Disallow: /agence-immobiliere/*/estimer-un-bien
+Disallow: /agence-immobiliere/*/vendre
+Disallow: /recrutement/rechercher?*
+Disallow: /*utm_source=
+Disallow: /*&combine
+Disallow: /*combine&
+Disallow: /*&id=
+Disallow: /*types=Array
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /bien/*/pdf
+Disallow: /*?slug
+Disallow: /acheter/rechercher?*
+Disallow: /louer/rechercher?*
+Disallow: /agence-immobiliere/*/mentions-legales
+Disallow: /agence-immobiliere/*/recrutement
+Disallow: /agence-immobiliere/*/candidature-spontanee
+Disallow: /agence-immobiliere/*/garantie-apres-vente
+Disallow: /agence-immobiliere/*/estimer-un-bien
+Disallow: /agence-immobiliere/*/vendre
+Disallow: /recrutement/rechercher?*
+Disallow: /*utm_source=
+Disallow: /*&combine
+Disallow: /*combine&
+Disallow: /*&id=
+Disallow: /*types=Array
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: AnthropicBot
+Allow: /
+
+Sitemap: https://www.laforet.com/sitemap.xml

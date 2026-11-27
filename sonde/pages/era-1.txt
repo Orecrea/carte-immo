@@ -1,0 +1,37 @@
+###### Sitemaps ######
+User-agent: *
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_achat.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_achat_biens.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_achat_appartement.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_achat_maison.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_achat_terrain.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_achat_programmes-neufs.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_achat_immeuble.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_achat_parking-garage.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_location.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_location_biens.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_location_appartement.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_location_maison.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_location_terrain.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_location_programmes-neufs.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_location_immeuble.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_location_parking-garage.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_agences.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_silo_fiches_agences.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_blog.xml
+Sitemap: https://www.eraimmobilier.com/sitemap/sitemap_autres.xml
+
+
+User-Agent: *
+Disallow: /mentions-legales
+Disallow: /donnees-personnelles
+Disallow: /acheter
+Disallow: /louer
+Disallow: /estimer
+Disallow: /mes-favoris
+Allow: /effectifs/*agence_id=*
+Disallow: *agence_id=*
+Disallow: *groupe_id=*
+Disallow: *display=*
+Disallow: *agent=*
+Disallow: *language=*

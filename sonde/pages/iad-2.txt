@@ -1,0 +1,53 @@
+User-agent: *
+Disallow: /account/
+Disallow: /en/account/
+Disallow: */account/*
+Disallow: */print
+Disallow: */print/*
+Disallow: */imprimer
+Disallow: /assessor/*
+Disallow: /agent/*
+Disallow: /consultant/*
+Disallow: /conseiller/*
+Disallow: /conseiller-immobilier/*/estimation
+Disallow: /en/real-estate-agent/*/estimate
+Disallow: /estimation-agent-response*
+Disallow: /liste/annonces*
+Disallow: /abtest/
+Disallow: /fr/*
+Disallow: *?returnTo=*
+Disallow: */v2_*
+Disallow: *?sort=priceAsc
+Disallow: *?sort=priceDesc
+Disallow: *?epc=*
+Disallow: *?groundSurfaceMin=*
+Disallow: *?groundSurfaceMax=*
+Disallow: *?priceMin=*
+Disallow: *?priceMax=*
+Disallow: *?room=*
+Disallow: *?surfaceMin=*
+Disallow: *?surfaceMax=*
+Disallow: *?reference=*
+Disallow: *?feature=*
+Disallow: *?location=*
+Disallow: *?radius=*
+Disallow: /*&*
+Disallow: /*modal=property_media*
+Disallow: /*modal=reviews*
+Disallow: /api/reviews
+Disallow: /estimer-votre-bien/estimateur
+Disallow: /en/estimate/online-valuation
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: msnbot-media
+Disallow: /
+
+User-agent: Scrapy
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+Sitemap: https://www.iadfrance.fr/sitemap.xml
